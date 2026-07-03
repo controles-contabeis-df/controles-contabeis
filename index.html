@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controles Contábeis — SEEC/GDF</title>
+<style>
+
+/* ── Reset ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --navy:        #0d1b3e;
+  --navy-mid:    #162550;
+  --navy-light:  #1e3267;
+  --teal:        #0090a8;
+  --teal-light:  #00b8d4;
+  --teal-pale:   #e6f7fb;
+  --gold:        #c89b2a;
+  --gold-light:  #f5e199;
+  --surface:     #ffffff;
+  --bg:          #f2f5f9;
+  --border:      #dce3ed;
+  --text:        #1a2033;
+  --muted:       #6b7a99;
+  --radius:      12px;
+  --shadow-card: 0 2px 14px rgba(13,27,62,.09);
+  --shadow-hover: 0 8px 28px rgba(13,27,62,.17);
+}
+
+body {
+  font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══════════════════════════════════════════
+   CABEÇALHO INSTITUCIONAL
+══════════════════════════════════════════ */
+.top-bar {
+  background: var(--navy);
+  color: #a8c0d8;
+  font-size: 11px;
+  letter-spacing: .4px;
+  padding: 6px 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.top-bar::before {
+  content: '';
+  display: inline-block;
+  width: 16px; height: 16px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%230090a8'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath fill='%23fff' d='M12 6v6l4 2-1 2-5-3V6z'/%3E%3C/svg%3E") center/contain no-repeat;
+  flex-shrink: 0;
+}
+
+header {
+  background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+  color: #fff;
+  padding: 24px 48px 22px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: 0 4px 20px rgba(13,27,62,.35);
+}
+
+.header-brasao {
+  width: 60px; height: 60px; flex-shrink: 0;
+  background: rgba(255,255,255,.10);
+  border: 2px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px;
+}
+
+.header-text h1 {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  line-height: 1.2;
+}
+.header-text .subtitle {
+  font-size: 12px;
+  color: #9ab0cc;
+  margin-top: 4px;
+  letter-spacing: .2px;
+}
+
+/* ══════════════════════════════════════════
+   SEÇÃO TÍTULO + INSTRUÇÃO
+══════════════════════════════════════════ */
+.section-intro {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 32px 48px 28px;
+}
+
+.section-intro h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--navy);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.section-intro h2 .badge-ano {
+  font-size: 12px;
+  font-weight: 700;
+  background: var(--teal-pale);
+  color: var(--teal);
+  border: 1px solid var(--teal-light);
+  border-radius: 20px;
+  padding: 2px 12px;
+  letter-spacing: .3px;
+}
+.section-intro p {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 680px;
+  line-height: 1.65;
+}
+.section-intro .instrucao {
+  margin-top: 16px;
+  font-size: 12.5px;
+  color: var(--navy);
+  font-weight: 600;
+  letter-spacing: .2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.section-intro .instrucao::before {
+  content: '↓';
+  color: var(--teal);
+  font-size: 14px;
+}
+
+/* ══════════════════════════════════════════
+   GRADE DE CARDS
+══════════════════════════════════════════ */
+.cards-area {
+  padding: 32px 48px 48px;
+  flex: 1;
+}
+
+.group-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.group-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+/* ── Card individual ── */
+.card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  text-decoration: none;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  transition: transform .18s, box-shadow .18s, border-color .18s;
+  position: relative;
+}
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--teal);
+}
+.card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--teal), var(--teal-light));
+  opacity: 0;
+  transition: opacity .18s;
+}
+.card:hover::after { opacity: 1; }
+
+.card-inner {
+  padding: 16px 18px 12px;
+  display: flex;
+  gap: 14px;
+  flex: 1;
+}
+
+.card-icon {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: var(--teal-pale);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  transition: background .18s;
+}
+.card:hover .card-icon { background: #cceef5; }
+
+.card-info { flex: 1; min-width: 0; }
+.card-info h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+.card-info p {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.card-tags {
+  padding: 0 18px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  letter-spacing: .2px;
+}
+
+.card-link {
+  border-top: 1px solid var(--border);
+  padding: 9px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--bg);
+  transition: background .15s;
+}
+.card:hover .card-link { background: var(--teal-pale); }
+.card-link .arrow {
+  font-size: 15px;
+  transition: transform .18s;
+}
+.card:hover .card-link .arrow { transform: translateX(4px); }
+
+/* ── Card "em breve" ── */
+.card.em-breve {
+  opacity: .65;
+  pointer-events: none;
+  cursor: default;
+}
+.card.em-breve .card-icon { background: #f0f2f6; }
+.card.em-breve .card-link { color: var(--muted); }
+.card.em-breve::after { display: none; }
+.em-breve-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 700;
+  background: #e8eaf2;
+  color: var(--muted);
+  border-radius: 20px;
+  padding: 2px 10px;
+  margin-left: 8px;
+  vertical-align: middle;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+}
+
+/* ══════════════════════════════════════════
+   RODAPÉ
+══════════════════════════════════════════ */
+footer {
+  background: var(--navy);
+  color: #6b88a8;
+  font-size: 11px;
+  padding: 14px 48px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+footer a { color: var(--teal-light); text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+
+/* ── Responsivo ── */
+@media (max-width: 640px) {
+  .top-bar, header, .section-intro, .cards-area, footer { padding-left: 18px; padding-right: 18px; }
+  header { padding-top: 18px; padding-bottom: 16px; }
+  .section-intro h2 { font-size: 16px; }
+  .cards-grid { grid-template-columns: 1fr; }
+}
+
+</style>
+</head>
+<body>
+
+<!-- ── Barra institucional ── -->
+<div class="top-bar">
+  Governo do Distrito Federal &nbsp;·&nbsp; Contadoria Geral do Distrito Federal &nbsp;·&nbsp; SEEC/SEFIN/CONTDF
+</div>
+
+<!-- ── Cabeçalho ── -->
+<header>
+  <div class="header-brasao">🏛️</div>
+  <div class="header-text">
+    <h1>Controles Contábeis</h1>
+    <div class="subtitle">
+      CONTDF · Contadoria Geral do Distrito Federal · SIGGO
+    </div>
+  </div>
+</header>
+
+<!-- ── Introdução ── -->
+<div class="section-intro">
+  <h2>
+    Painéis de Controles Contábeis
+    <span class="badge-ano">Exercício 2026</span>
+  </h2>
+  <p>
+    Painéis de controles contábeis criados com vistas a subsidiar a atuação dos usuários. Os dados são extraídos do SIGGO com o auxílio do Oracle SQL e passam por atualizações periodicamente. Cada painel permite filtrar, analisar e exportar os dados de interesse.
+  </p>
+  <div class="instrucao">Selecione o controle que deseja consultar</div>
+</div>
+
+<!-- ── Cards ── -->
+<div class="cards-area">
+
+  <div class="group-label">Controles disponíveis</div>
+
+  <div class="cards-grid">
+
+    <!-- 1. Contas Transitórias -->
+    <a class="card" href="contas_transitorias.html">
+      <div class="card-inner">
+        <div class="card-icon">⚖️</div>
+        <div class="card-info">
+          <h3>Contas Transitórias</h3>
+          <p>Monitora os saldos das contas que não podem encerrar o exercício com valor diferente de zero.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">15 contas monitoradas</span>
+        <span class="tag">Saldo ≠ 0</span>
+        <span class="tag">Por UG e mês</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 2. Empenhos a Liquidar -->
+    <a class="card" href="empenhos_liquidar.html">
+      <div class="card-inner">
+        <div class="card-icon">📋</div>
+        <div class="card-info">
+          <h3>Repasse a Receber — Despesas Empenhadas e não Liquidadas</h3>
+          <p>Consulta de despesas empenhadas e não liquidadas por Fonte e Categoria, para controle de repasses e registro de RPNP.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Conta 622920701</span>
+        <span class="tag">Fonte · Categoria</span>
+        <span class="tag">Por empenho e UG</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 3. Disponibilidades por Saldo -->
+    <a class="card" href="disponibilidades_saldo.html">
+      <div class="card-inner">
+        <div class="card-icon">💰</div>
+        <div class="card-info">
+          <h3>Disponibilidades por Saldo</h3>
+          <p>Verifica o equilíbrio entre Ativo Financeiro, Passivo Financeiro, RPNP e Conta 721190300, consolidado por UG e Fonte.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">AF · PF · RPNP</span>
+        <span class="tag">Conta 721190300</span>
+        <span class="tag">Por UG e Fonte</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 4. Disponibilidades por Lançamento -->
+    <a class="card" href="disponibilidades_lancamento.html">
+      <div class="card-inner">
+        <div class="card-icon">💰</div>
+        <div class="card-info">
+          <h3>Disponibilidades por Lançamento</h3>
+          <p>Identifica lançamentos que geram diferença entre Ativo Financeiro, Passivo Financeiro, RPNP e Conta 721190300.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">AF · PF · RPNP</span>
+        <span class="tag">Conta 721190300</span>
+        <span class="tag">Por lançamento</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 5. DDR por Saldo -->
+    <a class="card" href="disponibilidade_destinacao_recurso.html">
+      <div class="card-inner">
+        <div class="card-icon">🎯</div>
+        <div class="card-info">
+          <h3>DDR por Saldo</h3>
+          <p>Compara o saldo de contas por Gestão, UG, Conta e Fonte.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Contas 6XX/7XX x 8XX</span>
+        <span class="tag">Por UG, conta e fonte</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 6. DDR por Lançamento -->
+    <a class="card" href="ddr_lancamento.html">
+      <div class="card-inner">
+        <div class="card-icon">🎯</div>
+        <div class="card-info">
+          <h3>DDR por Lançamento</h3>
+          <p>Compara os lançamentos de contas por Gestão, UG, Conta e Fonte.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Contas 6XX/7XX x 8XX</span>
+        <span class="tag">Por documento</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 7. Em breve — placeholder para próximo painel -->
+    <div class="card em-breve">
+      <div class="card-inner">
+        <div class="card-icon">📋</div>
+        <div class="card-info">
+          <h3>Próximo controle <span class="em-breve-badge">Em breve</span></h3>
+          <p>Novo painel de controle contábil será disponibilizado em breve.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">A definir</span>
+      </div>
+      <div class="card-link">
+        Em desenvolvimento
+        <span class="arrow">→</span>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ── Rodapé ── -->
+<footer>
+  <span>
+    Controles Contábeis GDF &nbsp;·&nbsp; Produção: CONTDF &nbsp;·&nbsp;
+    <a href="https://github.com/controles-contabeis-df/controles-contabeis" target="_blank">GitHub</a>
+  </span>
+  <span id="data-atualizacao"></span>
+</footer>
+
+<script>
+  const hoje = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  document.getElementById('data-atualizacao').textContent = hoje;
+</script>
+
+</body>
+</html>
