@@ -23,16 +23,20 @@ import oracledb
 import pandas as pd
 
 # ── Conexão Oracle ──────────────────────────────────────────────────────────────
-ORACLE_USER = "usefp79"
-ORACLE_PASS = "bo39ra"
-ORACLE_DSN  = "10.69.1.118:1521/oraprd06"
+import os
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+
+ORACLE_USER = os.environ["ORACLE_USER"]
+ORACLE_PASS = os.environ["ORACLE_PASS"]
+ORACLE_DSN  = os.environ["ORACLE_DSN"]
 SCHEMA      = "MIL2026."
 
 # ── GitHub ──────────────────────────────────────────────────────────────────────
-GITHUB_TOKEN  = "COLOQUE_SEU_TOKEN_AQUI"   # nunca versionar o token real
-GITHUB_USER   = "controles-contabeis-df"
-GITHUB_REPO   = "controles-contabeis"
-GITHUB_BRANCH = "main"
+GITHUB_TOKEN  = os.environ["GITHUB_TOKEN"]
+GITHUB_USER   = os.environ["GITHUB_USER"]
+GITHUB_REPO   = os.environ["GITHUB_REPO"]
+GITHUB_BRANCH = os.environ["GITHUB_BRANCH"]
 
 ARQUIVO_HTML = "contas_transitorias.html"
 
