@@ -625,7 +625,8 @@ function exportar(){
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['COGESTAO','COUG','COFONTEFEDERAL','FONTE4','GND','VALOR_REPASSE_MES','VALOR_LIQ_MES','DIFERENCA_MES','VALOR_REPASSE','VALOR_LIQ','DIFERENCA'];
   const hdrs=['Gestao','UG','Fonte Federal','Fonte Gerencial','GND','Repassado no Mes','Liq no Mes','Diferenca Mes','Total Repassado','Total Liquidado','Diferenca Total'];
-  const linhas=[hdrs.join(';')].concat(fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):(r[c]===null?'':r[c])).join(';')));
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhas=[hdrs.join(';')].concat(fil.map(r=>cols.map(c=>cel(r[c])).join(';')));
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'repasses.csv'});
   a.click();URL.revokeObjectURL(a.href);
 }

@@ -430,7 +430,8 @@ function exportar(){{
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['TIPO_AGREGACAO','GESTAO_LABEL','COUG','UG','CONTA_LABEL','COCONTACORRENTE','SALDO_CALCULADO'];
   const hdr=['Tipo Agregacao','Gestao','Cod UG','Unidade Gestora','Conta Contabil','Conta Corrente','Saldo Calculado'];
-  const linhas=[hdr.join(';'),...fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]??'').join(';'))];
+  const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${{s}}"`:s;}};
+  const linhas=[hdr.join(';'),...fil.map(r=>cols.map(c=>cel(r[c])).join(';'))];
   const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{{type:'text/csv;charset=utf-8'}})),download:'saldo_invertido.csv'}});
   a.click();URL.revokeObjectURL(a.href);
 }}

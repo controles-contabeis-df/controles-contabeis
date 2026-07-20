@@ -525,7 +525,8 @@ function exportar(){
   const mes=mesSel!==''?nomeMes(mesSel):'Todos';
   const cols=['COGESTAO','COUG','COFONTE','AF','PF','RPNP','AF_MENOS_PF_RPNP','CONTA_721190300','DIFERENCA'];
   const hdrs=['Gestao','Unidade Gestora','Fonte','AF','PF','RPNP','AF-(PF+RPNP)','Conta 721190300','Diferenca'];
-  const linhasMes=fil.map(r=>[...cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]),mes]);
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhasMes=fil.map(r=>[...cols.map(c=>cel(r[c])),mes]);
   const linhas=[hdrs.concat(['Mes']).join(';')].concat(linhasMes.map(r=>r.join(';')));
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'disponibilidades_saldo.csv'});
   a.click();URL.revokeObjectURL(a.href);

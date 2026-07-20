@@ -583,7 +583,8 @@ function exportarEventos(){
 function exportar(){
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['GESTAO','UNIDADE_GESTORA','COGESTAO_EMIT','COUG_EMIT','INMES','DALANCAMENTO','NUDOCUMENTO','COEVENTO','AF','PF','RPNP','CONTA_721190300','AF_MENOS_PF_RPNP','DIFERENCA_AF_B'];
-  const linhas=[cols.join(';')].concat(fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]).join(';')));
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhas=[cols.join(';')].concat(fil.map(r=>cols.map(c=>cel(r[c])).join(';')));
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'disponibilidades_lancamento.csv'});
   a.click();URL.revokeObjectURL(a.href);
 }

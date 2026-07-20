@@ -709,7 +709,8 @@ function exportar(){
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['COGESTAO','COUG','CONTA_ORCAMENTARIA','COFONTE','SALDO_ORCAMENTARIA','CONTA_CONTROLE','SALDO_CONTROLE','DIFERENCA'];
   const hdrs=['Gestao','Unidade Gestora','Conta Orcamentaria','Fonte','Saldo Orcamentaria','Conta Controle','Saldo Controle','Diferenca'];
-  const linhas=[hdrs.join(';')].concat(fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):(r[c]===null?'':r[c])).join(';')));
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhas=[hdrs.join(';')].concat(fil.map(r=>cols.map(c=>cel(r[c])).join(';')));
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'disponibilidade_destinacao_recurso.csv'});
   a.click();URL.revokeObjectURL(a.href);
 }
