@@ -385,7 +385,8 @@ function kpis(){
 function exportar(){
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['COUG','UNIDADE_GESTORA','COGESTAO','EMPENHO','INMES','INCATEGORIA','COFONTE','SALDO'];
-  const linhas=[cols.join(';'),...fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]).join(';'))];
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhas=[cols.join(';'),...fil.map(r=>cols.map(c=>cel(r[c])).join(';'))];
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'empenhos_liquidar.csv'});
   a.click();URL.revokeObjectURL(a.href);
 }

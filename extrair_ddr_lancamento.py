@@ -750,12 +750,8 @@ function exportar(){
   const lancamentos=filDocs.flatMap(d=>d.rows);
   const cols=['COGESTAO','COUG','CONTA_A','FONTE_A','MOV_A','CONTA_B','FONTE_B','MOV_B','DIFERENCA','DALANCAMENTO','COGESTAO_EMIT','COUG_EMIT','NUDOCUMENTO','COEVENTO'];
   const hdrs=['Gestao Contab','UG Contab','Conta Contabil (a)','Fonte (a)','Mov Conta (a)','Conta Contabil (b)','Fonte (b)','Mov Conta (b)','Diferenca (a-b)','Data Lancamento','Gestao Emitente','UG Emitente','Numero Documento','Evento'];
-  const linhas=[hdrs.join(';')].concat(lancamentos.map(r=>cols.map(c=>{
-    const v=r[c];
-    if(v===null||v===undefined)return'';
-    if(typeof v==='number')return String(v).replace('.',',');
-    return v;
-  }).join(';')));
+  const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
+  const linhas=[hdrs.join(';')].concat(lancamentos.map(r=>cols.map(c=>cel(r[c])).join(';')));
   const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{type:'text/csv;charset=utf-8'})),download:'ddr_lancamento.csv'});
   a.click();URL.revokeObjectURL(a.href);
 }
