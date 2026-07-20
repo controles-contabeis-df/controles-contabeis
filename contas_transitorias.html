@@ -103,7 +103,7 @@ tfoot td{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pad
     </h1>
     <a class="voltar" href="index.html">← Painel inicial</a>
   </div>
-  <span id="ts">Gerado em: 20/07/2026 13:55:32</span>
+  <span id="ts">Gerado em: 20/07/2026 14:16:46</span>
 </header>
 <div class="aviso">⚠️ <strong>Atenção:</strong> As contas transitórias <strong>não podem encerrar o exercício com saldo</strong>. Use o filtro "Saldo ≠ 0" para identificar pendências a regularizar.</div>
 <div class="fbar">
@@ -261,7 +261,7 @@ function kpis(){
   const kc=nz===0?'ko':nz<fil.length*0.1?'kw':'ka';
   document.getElementById('krow').innerHTML=`
     <div class="kpi"><div class="kl">Total de Registros</div><div class="kv">${fil.length.toLocaleString('pt-BR')}</div><div class="ks">${ugs} UG${ugs!==1?'s':''} · ${contas} conta${contas!==1?'s':''}</div></div>
-    <div class="kpi ${kc}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${nz>0?'var(--red)':'var(--green)}">${nz.toLocaleString('pt-BR')}</div><div class="ks"><span class="badge ${nz>0?'br':'bg'}">${pct}% dos registros</span></div></div>
+    <div class="kpi ${kc}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${nz>0?'var(--red)':'var(--green)'}">${nz.toLocaleString('pt-BR')}</div><div class="ks"><span class="badge ${nz>0?'br':'bg'}">${pct}% dos registros</span></div></div>
     <div class="kpi ko"><div class="kl">Zerados (OK)</div><div class="kv" style="color:var(--green)">${ok.toLocaleString('pt-BR')}</div><div class="ks"><span class="badge bg">${(100-parseFloat(pct)).toFixed(1)}% dos registros</span></div></div>
     <div class="kpi ${Math.abs(st)<0.01?'ko':'ka'}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${vnz(st)}">${brl(st)}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
 }
