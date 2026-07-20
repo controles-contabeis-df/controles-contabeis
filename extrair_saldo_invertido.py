@@ -512,7 +512,7 @@ def publicar_github(caminho: str, mensagem_commit: str) -> None:
 
     git("add", caminho)
     git("commit", "-m", mensagem_commit)
-    git("pull", "--rebase", "origin", GITHUB_BRANCH)
+    git("pull", "--rebase", "--autostash", "origin", GITHUB_BRANCH)
     git("push", "origin", GITHUB_BRANCH)
 
     print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")

@@ -32,11 +32,9 @@ Write-Output $cabecalho; Add-Content -Path $log -Value $cabecalho
 Set-Location $pasta
 
 # Sincronizar git antes de publicar (evita push rejeitado por divergência)
-$gitMsg = "[$((Get-Date))] git stash + pull --rebase + stash pop"
+$gitMsg = "[$((Get-Date))] git pull --rebase --autostash"
 Write-Output $gitMsg; Add-Content -Path $log -Value $gitMsg
-$gitOut = git -C $pasta stash 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
-$gitOut = git -C $pasta pull origin main --rebase 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
-$gitOut = git -C $pasta stash pop 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
+$gitOut = git -C $pasta pull origin main --rebase --autostash 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
 
 Executar-Script "extrair_disponibilidades.py"
 Executar-Script "extrair_disponibilidades_saldo.py"
