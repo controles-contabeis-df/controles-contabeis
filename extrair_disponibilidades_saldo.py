@@ -108,7 +108,7 @@ ORDER BY s.COGESTAO, s.COUG, s.COFONTE
 """
 
 # ── HTML Template ──────────────────────────────────────────────────────────────
-HTML_TEMPLATE = """<!DOCTYPE html>
+HTML_TEMPLATE = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -200,7 +200,7 @@ tfoot tr td:first-child{text-align:left}
 <div id="ldg" style="display:none;position:fixed;inset:0;background:rgba(13,27,62,.55);z-index:9999;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;padding:32px 48px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.25)">
     <div style="font-size:22px;margin-bottom:12px">⏳</div>
-    <div style="font-weight:700;color:#0d1b3e;font-size:14px">Carregando dados do m\xeas...</div>
+    <div style="font-weight:700;color:#0d1b3e;font-size:14px">Carregando dados do mês...</div>
   </div>
 </div>
 
@@ -306,8 +306,8 @@ tfoot tr td:first-child{text-align:left}
 const DADOS_B64={dados_b64};
 const UGS_B64='{ugs_b64}';
 let ALL=[],UGS={},CACHE={},mesSel='',fil=[],ugSel='';
-const NOMES_MES=['Saldo Inicial','Janeiro','Fevereiro','Mar\xe7o','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro','Encerramento do Exerc\xedcio','Encerramento do Exerc\xedcio'];
-const nomeMes=m=>{const n=Number(m);return(n>=0&&n<=14)?n+' \xb7 '+NOMES_MES[n]:String(m);};
+const NOMES_MES=['Saldo Inicial','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro','Encerramento do Exercício','Encerramento do Exercício'];
+const nomeMes=m=>{const n=Number(m);return(n>=0&&n<=14)?n+' · '+NOMES_MES[n]:String(m);};
 const brl=v=>{if(isNaN(v))return'—';const r=Math.round(Number(v)*100)/100;return(r||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});};
 const vc=v=>Math.abs(v)<0.005?'vz':v>0?'vp':'vn';
 
@@ -340,7 +340,7 @@ async function carregarMes(mes){
     CACHE['']=todosData;ALL=todosData;UGS=ugsData;
   }catch(e){
     console.error('Erro ao descomprimir:',e);
-    document.getElementById('ldg').innerHTML='<div style="color:#c0392b;padding:40px;text-align:center">Erro ao carregar dados.<br>Recarregue a p\xe1gina.</div>';
+    document.getElementById('ldg').innerHTML='<div style="color:#c0392b;padding:40px;text-align:center">Erro ao carregar dados.<br>Recarregue a página.</div>';
     return;
   }
   document.getElementById('ldg').style.display='none';
@@ -441,6 +441,7 @@ function render(){
   const nF=fil.length,nU=new Set(fil.map(r=>r.COUG)).size,nG=Object.keys(tree).length;
   document.getElementById('cnt').textContent=nG+' Gestão/ões · '+nU+' UGs · '+nF.toLocaleString('pt-BR')+' fonte'+(nF!==1?'s':'');
 
+
   let html='';
   Object.keys(tree).sort().forEach(g=>{
     const ugMap=tree[g];
@@ -449,7 +450,7 @@ function render(){
     const nUgG=Object.keys(ugMap).length;
     const gid='g_'+g;
     html+='<tr class="row-gestao" onclick="toggle(\''+gid+'\')">'
-         +'<td><span class="tog" id="tog_'+gid+'">▶</span> GEST\xc3O '+g
+         +'<td><span class="tog" id="tog_'+gid+'">▶</span> GESTÃO '+g
          +' <span style="font-size:10px;opacity:.55">('+nUgG+' UG'+(nUgG!==1?'s':'')+')</span></td>'
          +'<td></td>'
          +valCols(tg)+'</tr>';
@@ -458,7 +459,7 @@ function render(){
       const fontes=ugMap[u],tu=soma(fontes),nome=UGS[u]||'';
       const uid=gid+'_u'+u;
       html+='<tr class="row-ug" data-par="'+gid+'" style="display:none" onclick="toggle(\''+uid+'\')">'
-           +'<td><span class="tog" id="tog_'+uid+'">▶</span> UG '+u+(nome?' \xb7 '+nome:'')
+           +'<td><span class="tog" id="tog_'+uid+'">▶</span> UG '+u+(nome?' · '+nome:'')
            +' <span style="font-size:10px;opacity:.5">('+fontes.length+' fonte'+(fontes.length!==1?'s':'')+')</span></td>'
            +'<td></td>'
            +valCols(tu)+'</tr>';
@@ -480,7 +481,7 @@ function render(){
   tb.innerHTML=html;
 
   const tot=soma(fil);
-  tf.innerHTML='<td>Total Geral \xb7 '+nG+' Gest\xe3o/\xf5es \xb7 '+nU+' UGs \xb7 '+nF.toLocaleString('pt-BR')+' fontes</td>'
+  tf.innerHTML='<td>Total Geral · '+nG+' Gestão/ões · '+nU+' UGs · '+nF.toLocaleString('pt-BR')+' fontes</td>'
     +'<td></td>'
     +'<td class="'+vc(tot.AF)+'">'+brl(tot.AF)+'</td>'
     +'<td class="'+vc(tot.PF)+'">'+brl(tot.PF)+'</td>'
@@ -538,10 +539,10 @@ function kpis(){
     '<div class="kpi"><div class="kl">Ativo Financeiro (AF)</div><div class="kv '+vc(sm('AF'))+'">'+brl(sm('AF'))+'</div><div class="ks">Contas 1XXXXXXXX (F)</div></div>'
    +'<div class="kpi"><div class="kl">Passivo Financeiro (PF)</div><div class="kv '+vc(sm('PF'))+'">'+brl(sm('PF'))+'</div><div class="ks">Contas 22XXXXXXX (F)</div></div>'
    +'<div class="kpi"><div class="kl">RPNP</div><div class="kv '+vc(sm('RPNP'))+'">'+brl(sm('RPNP'))+'</div><div class="ks">Conta 631100000</div></div>'
-   +'<div class="kpi"><div class="kl">AF − (PF + RPNP) \xb7 coluna (a)</div><div class="kv '+vc(a_val)+'">'+brl(a_val)+'</div><div class="ks">Equil\xedbrio esperado = Conta 721190300</div></div>'
+   +'<div class="kpi"><div class="kl">AF − (PF + RPNP) · coluna (a)</div><div class="kv '+vc(a_val)+'">'+brl(a_val)+'</div><div class="ks">Equilíbrio esperado = Conta 721190300</div></div>'
    +'<div class="kpi"><div class="kl">Conta 721190300 (b)</div><div class="kv '+vc(sm('CONTA_721190300'))+'">'+brl(sm('CONTA_721190300'))+'</div><div class="ks">Disponibilidades</div></div>'
-   +'<div class="kpi '+dc+'"><div class="kl">Diferen\xe7a (a − b)</div><div class="kv '+vc(dif)+'">'+brl(dif)+'</div>'
-   +'<div class="ks"><span class="badge '+(cd>0?'br':'bg')+'">'+cd.toLocaleString('pt-BR')+' fontes c/ dif. \xb7 '+pct+'%</span></div></div>';
+   +'<div class="kpi '+dc+'"><div class="kl">Diferença (a − b)</div><div class="kv '+vc(dif)+'">'+brl(dif)+'</div>'
+   +'<div class="ks"><span class="badge '+(cd>0?'br':'bg')+'">'+cd.toLocaleString('pt-BR')+' fontes c/ dif. · '+pct+'%</span></div></div>';
 }
 
 /* ── Exportar CSV ── */
