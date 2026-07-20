@@ -36,6 +36,7 @@ $gitMsg = "[$((Get-Date))] git pull --rebase --autostash"
 Write-Output $gitMsg; Add-Content -Path $log -Value $gitMsg
 $gitOut = git -C $pasta pull origin main --rebase --autostash 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
 
+Executar-Script "extrair_contas_transitorias.py"
 Executar-Script "extrair_disponibilidades.py"
 Executar-Script "extrair_disponibilidades_saldo.py"
 Executar-Script "extrair_disponibilidade_destinacao_recurso.py"
