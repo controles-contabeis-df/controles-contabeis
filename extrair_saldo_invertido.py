@@ -457,9 +457,9 @@ def extrair(ug: str | None) -> pd.DataFrame:
     params = {}
     if ug: params["ug"] = ug
 
-    print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle…")
+    print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle...")
     with oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN) as conn:
-        print(f"[{datetime.now():%H:%M:%S}] Executando consulta…")
+        print(f"[{datetime.now():%H:%M:%S}] Executando consulta...")
         with conn.cursor() as cur:
             cur.execute(sql, params)
             colunas = [c[0] for c in cur.description]
@@ -505,7 +505,7 @@ def publicar_github(caminho: str, mensagem_commit: str) -> None:
             raise RuntimeError(r.stderr.strip())
         return r.stdout.strip()
 
-    print(f"[{datetime.now():%H:%M:%S}] Publicando no GitHub…")
+    print(f"[{datetime.now():%H:%M:%S}] Publicando no GitHub...")
     try:
         git("remote", "set-url", "origin", url_remote)
     except RuntimeError:
@@ -517,7 +517,7 @@ def publicar_github(caminho: str, mensagem_commit: str) -> None:
     git("push", "origin", GITHUB_BRANCH)
 
     print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")
-    print(f"  → https://{GITHUB_USER}.github.io/{GITHUB_REPO}/{caminho}")
+    print(f"  -> https://{GITHUB_USER}.github.io/{GITHUB_REPO}/{caminho}")
 
 
 def main() -> None:
@@ -541,7 +541,7 @@ def main() -> None:
         ts = datetime.now().strftime("%d/%m/%Y %H:%M")
         publicar_github(
             caminho=ARQUIVO_HTML,
-            mensagem_commit=f"chore: atualiza saldo invertido — {ts}",
+            mensagem_commit=f"chore: atualiza saldo invertido -- {ts}",
         )
 
     com_saldo = int((df["SALDO_CALCULADO"] < 0).sum())
