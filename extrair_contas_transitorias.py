@@ -54,13 +54,11 @@ CONTAS_STR = ", ".join(str(c) for c in CONTAS_TRANSITORIAS)
 # ── SQL ─────────────────────────────────────────────────────────────────────────
 SQL = f"""
 SELECT
-    sc.ANO                                          AS EXERCICIO,
+    2026                                             AS EXERCICIO,
     sc.INMES                                        AS MES,
     sc.COUG,
     NVL(ug.COUG, sc.COUG) || ' - ' || NVL(ug.NOUG, 'Sem nome')
                                                     AS UNIDADE_GESTORA,
-    NVL(ta.COTIPO || ' - ' || ta.NOAGREGACAO, 'Sem classificação')
-                                                    AS TIPO_AGREGACAO,
     sc.COCONTACONTABIL                              AS CONTA_CONTABIL,
     SUM(sc.VACREDITO - sc.VADEBITO)                 AS SALDO
 FROM {SCHEMA}VSALDOCONTABIL sc
@@ -68,24 +66,15 @@ LEFT JOIN {SCHEMA}UNIDADEGESTORA ug
     ON  ug.COUG = sc.COUG
     AND ug.COUG <> '0'
     AND ug.NOUG NOT LIKE '%TESTE%'
-LEFT JOIN {SCHEMA}GESTAO g
-    ON  g.COGESTAO = sc.COGESTAO
-LEFT JOIN {SCHEMA}TIPOAGREGACAOADM taa
-    ON  taa.INTIPOADM = g.INTIPOADM
-LEFT JOIN {SCHEMA}TIPOAGREGACAO ta
-    ON  ta.COTIPO = taa.COTIPO
 WHERE sc.COCONTACONTABIL IN ({CONTAS_STR})
 {{filtro_ug}}
-{{filtro_ano}}
 GROUP BY
-    sc.ANO,
     sc.INMES,
     sc.COUG,
     NVL(ug.COUG, sc.COUG) || ' - ' || NVL(ug.NOUG, 'Sem nome'),
-    NVL(ta.COTIPO || ' - ' || ta.NOAGREGACAO, 'Sem classificação'),
     sc.COCONTACONTABIL
 ORDER BY
-    sc.ANO, sc.INMES, sc.COUG, sc.COCONTACONTABIL
+    sc.INMES, sc.COUG, sc.COCONTACONTABIL
 """
 
 # ── HTML template ───────────────────────────────────────────────────────────────
@@ -387,13 +376,11 @@ init();
 oracledb.init_oracle_client(lib_dir=r"C:\oracle\instantclient_23_0")
 
 
-def extrair(ug: str | None, ano: str | None) -> pd.DataFrame:
-    filtro_ug  = "AND sc.COUG = :ug"  if ug  else ""
-    filtro_ano = "AND sc.ANO  = :ano" if ano else ""
-    sql = SQL.format(filtro_ug=filtro_ug, filtro_ano=filtro_ano)
+def extrair(ug: str | None, ano: str | None = None) -> pd.DataFrame:
+    filtro_ug = "AND sc.COUG = :ug" if ug else ""
+    sql = SQL.format(filtro_ug=filtro_ug)
     params = {}
-    if ug:  params["ug"]  = ug
-    if ano: params["ano"] = ano
+    if ug: params["ug"] = ug
 
     print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle…")
     with oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN) as conn:
@@ -404,8 +391,7 @@ def extrair(ug: str | None, ano: str | None) -> pd.DataFrame:
             df = pd.DataFrame(cur.fetchall(), columns=colunas)
 
     df["SALDO"] = pd.to_numeric(df["SALDO"], errors="coerce").fillna(0)
-    df["EXERCICIO"] = df["EXERCICIO"].astype(int)
-    df["MES"]       = df["MES"].astype(int)
+    df["MES"]   = df["MES"].astype(int)
     df["CONTA_CONTABIL"] = df["CONTA_CONTABIL"].astype(str)
     df["COUG"] = df["COUG"].astype(str)
 
@@ -447,10 +433,11 @@ def publicar_github(caminho: str, mensagem_commit: str) -> None:
 
     git("add", caminho)
     git("commit", "-m", mensagem_commit)
+    git("pull", "--rebase", "--autostash", "origin", GITHUB_BRANCH)
     git("push", "origin", GITHUB_BRANCH)
 
     print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")
-    print(f"  → https://{GITHUB_USER}.github.io/{GITHUB_REPO}/{caminho}")
+    print(f"  -> https://{GITHUB_USER}.github.io/{GITHUB_REPO}/{caminho}")
 
 
 def main() -> None:
