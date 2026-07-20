@@ -1,0 +1,16 @@
+# Credenciais — nunca versionar
+.env
+gmail_credentials.json
+gmail_token.json
+Credenciais_OAuth.*
+
+# Logs gerados automaticamente
+logs/
+
+# Backups e arquivos temporários
+backup_*/
+*_backup_*.py
+
+# Arquivos de referência/documentação local (não fazem parte do site)
+Controle_*.txt
+Controle_*.png
