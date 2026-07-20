@@ -91,17 +91,20 @@ saldos AS (
     GROUP BY COGESTAO, COUG, COFONTE
 )
 SELECT
-    COGESTAO,
-    COUG,
-    COFONTE,
-    AF,
-    PF,
-    RPNP,
-    ROUND(AF - PF - RPNP, 2)                    AS AF_MENOS_PF_RPNP,
-    CONTA_721190300,
-    ROUND((AF - PF - RPNP) - CONTA_721190300, 2) AS DIFERENCA
-FROM saldos
-ORDER BY COGESTAO, COUG, COFONTE
+    s.COGESTAO,
+    s.COUG,
+    s.COFONTE,
+    NVL(ft.INFONTETESOURO, 'N')  AS INFONTETESOURO,
+    NVL(ft.INDESTINACAO,   0)    AS INDESTINACAO,
+    s.AF,
+    s.PF,
+    s.RPNP,
+    ROUND(s.AF - s.PF - s.RPNP, 2)                      AS AF_MENOS_PF_RPNP,
+    s.CONTA_721190300,
+    ROUND((s.AF - s.PF - s.RPNP) - s.CONTA_721190300, 2) AS DIFERENCA
+FROM saldos s
+LEFT JOIN {schema}FONTERECURSO ft ON ft.COFONTE = s.COFONTE
+ORDER BY s.COGESTAO, s.COUG, s.COFONTE
 """
 
 # ── HTML Template ──────────────────────────────────────────────────────────────
@@ -213,6 +216,24 @@ tfoot tr td:first-child{text-align:left}
 </header>
 
 <div class="fbar">
+  <div class="fg">
+    <label>Fonte Tesouro</label>
+    <select id="fft" onchange="aplicar()">
+      <option value="">Todos</option>
+      <option value="S">Sim</option>
+      <option value="N">N\xe3o</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label>Destina\xe7\xe3o do Recurso</label>
+    <select id="fdr" onchange="aplicar()">
+      <option value="">Todos</option>
+      <option value="0">0 \xb7 N\xe3o Atribu\xeddo</option>
+      <option value="1">1 \xb7 Ordin\xe1rio</option>
+      <option value="2">2 \xb7 Vinculado</option>
+      <option value="3">3 \xb7 Extraordin\xe1rio</option>
+    </select>
+  </div>
   <div class="fg ug-wrap" style="min-width:220px">
     <label>Unidade Gestora</label>
     <input class="ug-input" id="ug-inp" placeholder="Código ou nome..." autocomplete="off" oninput="ugInput()" onfocus="ugInput()">
@@ -351,9 +372,13 @@ document.addEventListener('click',function(e){if(!e.target.closest('.ug-wrap'))d
 function aplicar(){
   const fg=document.getElementById('ff').value;
   const sd=document.getElementById('fs').value;
+  const fft=document.getElementById('fft').value;
+  const fdr=document.getElementById('fdr').value;
   fil=ALL.filter(r=>{
     if(ugSel&&String(r.COUG)!==ugSel)return false;
     if(fg&&String(r.COFONTE)!==fg)return false;
+    if(fft&&String(r.INFONTETESOURO)!==fft)return false;
+    if(fdr!==''&&String(r.INDESTINACAO)!==fdr)return false;
     if(sd==='dif_pos'&&r.DIFERENCA<=0)return false;
     if(sd==='dif_neg'&&r.DIFERENCA>=0)return false;
     if(sd==='dif_nz'&&Math.abs(r.DIFERENCA)<0.005)return false;
@@ -368,7 +393,7 @@ async function trocarMes(mes){
   document.getElementById('ldg').style.display='none';
   initFiltros();
 }
-function limpar(){document.getElementById('fm').value='';mesSel='';ALL=CACHE['']||[];document.getElementById('ff').value='';document.getElementById('fs').value='todos';limparUG();}
+function limpar(){document.getElementById('fm').value='';mesSel='';ALL=CACHE['']||[];document.getElementById('ff').value='';document.getElementById('fs').value='todos';document.getElementById('fft').value='';document.getElementById('fdr').value='';limparUG();}
 
 function initFiltros(){
   const fontes=[...new Set(ALL.map(r=>String(r.COFONTE)))].sort();
@@ -523,8 +548,8 @@ function kpis(){
 function exportar(){
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const mes=mesSel!==''?nomeMes(mesSel):'Todos';
-  const cols=['COGESTAO','COUG','COFONTE','AF','PF','RPNP','AF_MENOS_PF_RPNP','CONTA_721190300','DIFERENCA'];
-  const hdrs=['Gestao','Unidade Gestora','Fonte','AF','PF','RPNP','AF-(PF+RPNP)','Conta 721190300','Diferenca'];
+  const cols=['COGESTAO','COUG','COFONTE','INFONTETESOURO','INDESTINACAO','AF','PF','RPNP','AF_MENOS_PF_RPNP','CONTA_721190300','DIFERENCA'];
+  const hdrs=['Gestao','Unidade Gestora','Fonte','Fonte Tesouro','Destinacao Recurso','AF','PF','RPNP','AF-(PF+RPNP)','Conta 721190300','Diferenca'];
   const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=v??'';return /^\d+$/.test(s)?`="${s}"`:s;};
   const linhasMes=fil.map(r=>[...cols.map(c=>cel(r[c])),mes]);
   const linhas=[hdrs.concat(['Mes']).join(';')].concat(linhasMes.map(r=>r.join(';')));
