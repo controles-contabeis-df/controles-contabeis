@@ -108,7 +108,7 @@ ORDER BY s.COGESTAO, s.COUG, s.COFONTE
 """
 
 # ── HTML Template ──────────────────────────────────────────────────────────────
-HTML_TEMPLATE = r"""<!DOCTYPE html>
+HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -216,24 +216,6 @@ tfoot tr td:first-child{text-align:left}
 </header>
 
 <div class="fbar">
-  <div class="fg">
-    <label>Fonte Tesouro</label>
-    <select id="fft" onchange="aplicar()">
-      <option value="">Todos</option>
-      <option value="S">Sim</option>
-      <option value="N">N\xe3o</option>
-    </select>
-  </div>
-  <div class="fg">
-    <label>Destina\xe7\xe3o do Recurso</label>
-    <select id="fdr" onchange="aplicar()">
-      <option value="">Todos</option>
-      <option value="0">0 \xb7 N\xe3o Atribu\xeddo</option>
-      <option value="1">1 \xb7 Ordin\xe1rio</option>
-      <option value="2">2 \xb7 Vinculado</option>
-      <option value="3">3 \xb7 Extraordin\xe1rio</option>
-    </select>
-  </div>
   <div class="fg ug-wrap" style="min-width:220px">
     <label>Unidade Gestora</label>
     <input class="ug-input" id="ug-inp" placeholder="Código ou nome..." autocomplete="off" oninput="ugInput()" onfocus="ugInput()">
@@ -264,6 +246,24 @@ tfoot tr td:first-child{text-align:left}
   <div class="fg">
     <label>Fonte</label>
     <select id="ff" onchange="aplicar()"><option value="">Todas</option></select>
+  </div>
+  <div class="fg">
+    <label>Fonte Tesouro</label>
+    <select id="fft" onchange="aplicar()">
+      <option value="">Todos</option>
+      <option value="S">Sim</option>
+      <option value="N">Não</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label>Destinação do Recurso</label>
+    <select id="fdr" onchange="aplicar()">
+      <option value="">Todos</option>
+      <option value="0">0 · Não Atribuído</option>
+      <option value="1">1 · Ordinário</option>
+      <option value="2">2 · Vinculado</option>
+      <option value="3">3 · Extraordinário</option>
+    </select>
   </div>
   <div class="fg">
     <label>Exibir saldos</label>
