@@ -54,27 +54,34 @@ CONTAS_STR = ", ".join(str(c) for c in CONTAS_TRANSITORIAS)
 # ── SQL ─────────────────────────────────────────────────────────────────────────
 SQL = f"""
 SELECT
-    2026                                             AS EXERCICIO,
-    sc.INMES                                        AS MES,
+    sc.COGESTAO,
+    NVL(g.NOGESTAO, 'Sem nome')                     AS NOGESTAO,
     sc.COUG,
     NVL(ug.COUG, sc.COUG) || ' - ' || NVL(ug.NOUG, 'Sem nome')
                                                     AS UNIDADE_GESTORA,
     sc.COCONTACONTABIL                              AS CONTA_CONTABIL,
+    NVL(cc.NOCONTACONTABIL, 'Sem nome')             AS NOCONTACONTABIL,
     SUM(sc.VACREDITO - sc.VADEBITO)                 AS SALDO
 FROM {SCHEMA}VSALDOCONTABIL sc
 LEFT JOIN {SCHEMA}UNIDADEGESTORA ug
     ON  ug.COUG = sc.COUG
     AND ug.COUG <> '0'
     AND ug.NOUG NOT LIKE '%TESTE%'
+LEFT JOIN {SCHEMA}GESTAO g
+    ON  g.COGESTAO = sc.COGESTAO
+LEFT JOIN {SCHEMA}VCONTACONTABIL cc
+    ON  cc.COCONTACONTABIL = sc.COCONTACONTABIL
 WHERE sc.COCONTACONTABIL IN ({CONTAS_STR})
 {{filtro_ug}}
 GROUP BY
-    sc.INMES,
+    sc.COGESTAO,
+    NVL(g.NOGESTAO, 'Sem nome'),
     sc.COUG,
     NVL(ug.COUG, sc.COUG) || ' - ' || NVL(ug.NOUG, 'Sem nome'),
-    sc.COCONTACONTABIL
+    sc.COCONTACONTABIL,
+    NVL(cc.NOCONTACONTABIL, 'Sem nome')
 ORDER BY
-    sc.INMES, sc.COUG, sc.COCONTACONTABIL
+    sc.COGESTAO, sc.COUG, sc.COCONTACONTABIL
 """
 
 # ── HTML template ───────────────────────────────────────────────────────────────
@@ -108,16 +115,16 @@ header h1 span{{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-
 .fg label{{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}}
 .fg select{{border:1.5px solid var(--border);border-radius:6px;padding:7px 28px 7px 10px;font-size:12.5px;min-width:140px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7a99' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--text);cursor:pointer;appearance:none}}
 .fg select:focus{{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}}
-.ug-wrap{{position:relative;min-width:260px}}
-.ug-input{{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}}
-.ug-input:focus{{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}}
-.ug-clear{{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}}
-.ug-dd{{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}}
-.ug-dd-item{{padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border);transition:background .1s}}
-.ug-dd-item:last-child{{border-bottom:none}}
-.ug-dd-item:hover{{background:var(--hover)}}
-.ug-dd-item strong{{color:var(--navy);font-weight:700}}
-.ug-dd-empty{{padding:12px;color:var(--muted);font-size:12px;text-align:center}}
+.ac-wrap{{position:relative;min-width:220px}}
+.ac-input{{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}}
+.ac-input:focus{{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}}
+.ac-clear{{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}}
+.ac-dd{{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}}
+.ac-dd-item{{padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border);transition:background .1s}}
+.ac-dd-item:last-child{{border-bottom:none}}
+.ac-dd-item:hover{{background:var(--hover)}}
+.ac-dd-item strong{{color:var(--navy);font-weight:700}}
+.ac-dd-empty{{padding:12px;color:var(--muted);font-size:12px;text-align:center}}
 .bgrp{{display:flex;gap:8px;margin-left:auto;align-items:flex-end;flex-wrap:wrap}}
 .btn{{display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:filter .15s,transform .1s;white-space:nowrap}}
 .btn:hover{{filter:brightness(1.08);transform:translateY(-1px)}}
@@ -179,7 +186,7 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
   <div style="display:flex;align-items:center">
     <div class="hlogo">⚖️</div>
     <h1>Contas Transitórias
-      <span>SIGGO · {schema_label} · Saldos que devem zerar ao fim do exercício</span>
+      <span>SIGGO · Saldos de contas contábeis que devem zerar ao fim do exercício</span>
     </h1>
     <a class="voltar" href="index.html">← Painel inicial</a>
   </div>
@@ -187,19 +194,33 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
 </header>
 <div class="aviso">⚠️ <strong>Atenção:</strong> As contas transitórias <strong>não podem encerrar o exercício com saldo</strong>. Use o filtro "Saldo ≠ 0" para identificar pendências a regularizar.</div>
 <div class="fbar">
-  <div class="fg"><label>Exercício</label><select id="fe"><option value="">Todos</option></select></div>
-  <div class="fg"><label>Mês</label><select id="fm"><option value="">Todos</option></select></div>
   <div class="fg">
-    <label>Unidade Gestora</label>
-    <div class="ug-wrap">
-      <input id="fu-input" class="ug-input" type="text" placeholder="Código ou nome…" autocomplete="off"
-             oninput="onUGInput()" onfocus="onUGFocus()" onblur="onUGBlur()">
-      <button class="ug-clear" id="fu-clear" onclick="limparUG()" title="Limpar">✕</button>
-      <div class="ug-dd" id="fu-dd"></div>
+    <label>Gestão</label>
+    <div class="ac-wrap">
+      <input id="fg-input" class="ac-input" type="text" placeholder="Código ou nome…" autocomplete="off"
+             oninput="onACInput('g')" onfocus="onACFocus('g')" onblur="onACBlur('g')">
+      <button class="ac-clear" id="fg-clear" onclick="limparAC('g')" title="Limpar">✕</button>
+      <div class="ac-dd" id="fg-dd"></div>
     </div>
   </div>
-  <div class="fg"><label>Tipo de Agregação</label><select id="ft"><option value="">Todos</option></select></div>
-  <div class="fg"><label>Conta Contábil</label><select id="fc"><option value="">Todas</option></select></div>
+  <div class="fg">
+    <label>Unidade Gestora</label>
+    <div class="ac-wrap" style="min-width:280px">
+      <input id="fu-input" class="ac-input" type="text" placeholder="Código ou nome…" autocomplete="off"
+             oninput="onACInput('u')" onfocus="onACFocus('u')" onblur="onACBlur('u')">
+      <button class="ac-clear" id="fu-clear" onclick="limparAC('u')" title="Limpar">✕</button>
+      <div class="ac-dd" id="fu-dd"></div>
+    </div>
+  </div>
+  <div class="fg">
+    <label>Conta Contábil</label>
+    <div class="ac-wrap" style="min-width:300px">
+      <input id="fc-input" class="ac-input" type="text" placeholder="Código ou nome…" autocomplete="off"
+             oninput="onACInput('c')" onfocus="onACFocus('c')" onblur="onACBlur('c')">
+      <button class="ac-clear" id="fc-clear" onclick="limparAC('c')" title="Limpar">✕</button>
+      <div class="ac-dd" id="fc-dd"></div>
+    </div>
+  </div>
   <div class="bgrp">
     <button class="btn btn-nz" id="btn-nz" onclick="toggleNZ()">⚠ Saldo ≠ 0</button>
     <button class="btn btn-g" onclick="limpar()">↺ Limpar filtros</button>
@@ -216,11 +237,9 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
     <table>
       <thead>
         <tr>
+          <th onclick="sort('GESTAO_LABEL',this)">Gestão<span class="si">↕</span></th>
           <th onclick="sort('UNIDADE_GESTORA',this)">Unidade Gestora<span class="si">↕</span></th>
-          <th onclick="sort('TIPO_AGREGACAO',this)">Tipo de Agregação<span class="si">↕</span></th>
-          <th onclick="sort('EXERCICIO',this)" class="right">Exercício<span class="si">↕</span></th>
-          <th onclick="sort('MES',this)" class="right">Mês<span class="si">↕</span></th>
-          <th onclick="sort('CONTA_CONTABIL',this)" class="right">Conta Contábil<span class="si">↕</span></th>
+          <th onclick="sort('CONTA_LABEL',this)">Conta Contábil<span class="si">↕</span></th>
           <th onclick="sort('SALDO',this)" class="right">Saldo<span class="si">↕</span></th>
         </tr>
       </thead>
@@ -232,31 +251,65 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
 </div>
 <script>
 const ALL={dados};
-const MESES=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-let fil=[],sCol='',sAsc=true,pg=1,ugSel='',filtrarNZ=false;
+let fil=[],sCol='',sAsc=true,pg=1,filtrarNZ=false;
 const PS=50;
 const brl=v=>isNaN(v)?'—':Number(v).toLocaleString('pt-BR',{{style:'currency',currency:'BRL'}});
 const vnz=v=>Math.abs(v)<0.005?'vz':'vnz';
 
-const ugMap={{}};
-ALL.forEach(r=>{{if(r.COUG&&!ugMap[r.COUG])ugMap[r.COUG]=r.UNIDADE_GESTORA;}});
-const ugList=Object.entries(ugMap).map(([c,label])=>{{return{{c,label}}}}).sort((a,b)=>a.c.localeCompare(b.c));
+// Campos derivados
+ALL.forEach(r=>{{
+  r.GESTAO_LABEL=r.COGESTAO+(r.NOGESTAO&&r.NOGESTAO!=='Sem nome'?' - '+r.NOGESTAO:'');
+  r.CONTA_LABEL=r.CONTA_CONTABIL+(r.NOCONTACONTABIL&&r.NOCONTACONTABIL!=='Sem nome'?' - '+r.NOCONTACONTABIL:'');
+}});
 
-function onUGInput(){{
-  const v=document.getElementById('fu-input').value.toLowerCase();
-  const m=v?ugList.filter(u=>u.c.includes(v)||u.label.toLowerCase().includes(v)):ugList;
-  renderDD(m);if(!v){{ugSel='';document.getElementById('fu-clear').style.display='none';}}
+// Listas para autocomplete
+function buildList(keyFn,labelFn){{
+  const m={{}};
+  ALL.forEach(r=>{{const k=keyFn(r);if(k&&!m[k])m[k]=labelFn(r);}});
+  return Object.entries(m).map(([c,label])=>{{return{{c,label}}}}).sort((a,b)=>a.c.localeCompare(b.c,'pt-BR'));
 }}
-function onUGFocus(){{const v=document.getElementById('fu-input').value.toLowerCase();renderDD(v?ugList.filter(u=>u.c.includes(v)||u.label.toLowerCase().includes(v)):ugList);}}
-function onUGBlur(){{setTimeout(()=>document.getElementById('fu-dd').style.display='none',200);}}
-function renderDD(lista){{
-  const dd=document.getElementById('fu-dd');
-  if(!lista.length){{dd.innerHTML='<div class="ug-dd-empty">Nenhuma UG encontrada</div>';dd.style.display='block';return;}}
-  dd.innerHTML=lista.slice(0,80).map(u=>`<div class="ug-dd-item" onmousedown="selUG('${{u.c}}','${{u.label.replace(/'/g,"\\'")}}')"><strong>${{u.c}}</strong> — ${{u.label}}</div>`).join('');
+const gestaoList=buildList(r=>r.COGESTAO,r=>r.GESTAO_LABEL);
+const ugList    =buildList(r=>r.COUG,    r=>r.UNIDADE_GESTORA);
+const contaList =buildList(r=>r.CONTA_CONTABIL,r=>r.CONTA_LABEL);
+
+// Estado dos autocompletes
+const acState={{'g':{{sel:'',list:gestaoList,inp:'fg-input',clr:'fg-clear',dd:'fg-dd'}},
+                'u':{{sel:'',list:ugList,    inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}},
+                'c':{{sel:'',list:contaList, inp:'fc-input',clr:'fc-clear',dd:'fc-dd'}}}};
+
+function onACInput(k){{
+  const st=acState[k],v=document.getElementById(st.inp).value.toLowerCase();
+  const m=v?st.list.filter(x=>x.c.includes(v)||x.label.toLowerCase().includes(v)):st.list;
+  renderACDD(k,m);if(!v){{st.sel='';document.getElementById(st.clr).style.display='none';}}
+}}
+function onACFocus(k){{
+  const st=acState[k],v=document.getElementById(st.inp).value.toLowerCase();
+  renderACDD(k,v?st.list.filter(x=>x.c.includes(v)||x.label.toLowerCase().includes(v)):st.list);
+}}
+function onACBlur(k){{setTimeout(()=>document.getElementById(acState[k].dd).style.display='none',200);}}
+function renderACDD(k,lista){{
+  const dd=document.getElementById(acState[k].dd);
+  if(!lista.length){{dd.innerHTML='<div class="ac-dd-empty">Nenhum resultado</div>';dd.style.display='block';return;}}
+  dd.innerHTML=lista.slice(0,100).map(x=>{{
+    const sep=x.label.indexOf(' - ');
+    const dispHtml=sep>=0?`<strong>${{x.label.slice(0,sep)}}</strong> —${{x.label.slice(sep+2)}}`:x.label;
+    return `<div class="ac-dd-item" onmousedown="selAC('${{k}}','${{x.c}}','${{x.label.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}}')">${{dispHtml}}</div>`;
+  }}).join('');
   dd.style.display='block';
 }}
-function selUG(c,label){{ugSel=c;document.getElementById('fu-input').value=label;document.getElementById('fu-dd').style.display='none';document.getElementById('fu-clear').style.display='block';aplicar();}}
-function limparUG(){{ugSel='';document.getElementById('fu-input').value='';document.getElementById('fu-clear').style.display='none';aplicar();}}
+function selAC(k,c,label){{
+  const st=acState[k];st.sel=c;
+  document.getElementById(st.inp).value=label;
+  document.getElementById(st.dd).style.display='none';
+  document.getElementById(st.clr).style.display='block';
+  aplicar();
+}}
+function limparAC(k){{
+  const st=acState[k];st.sel='';
+  document.getElementById(st.inp).value='';
+  document.getElementById(st.clr).style.display='none';
+  aplicar();
+}}
 
 function toggleNZ(){{
   filtrarNZ=!filtrarNZ;
@@ -266,39 +319,21 @@ function toggleNZ(){{
   aplicar();
 }}
 
-function init(){{
-  const uniq=(k,num)=>{{const v=[...new Set(ALL.map(r=>r[k]))];return num?v.sort((a,b)=>a-b):v.sort((a,b)=>String(a).localeCompare(String(b),'pt-BR'));}}
-  fillSel('fe',uniq('EXERCICIO',true));
-  fillSel('fm',uniq('MES',true).map(m=>{{return{{val:m,label:m+(MESES[m]?' — '+MESES[m]:'')}}}}));
-  fillSel('ft',uniq('TIPO_AGREGACAO'));
-  fillSel('fc',uniq('CONTA_CONTABIL'));
-  aplicar();
-}}
-function fillSel(id,vals){{
-  const s=document.getElementById(id),p=s.value;
-  s.innerHTML='<option value="">Todos</option>';
-  vals.forEach(v=>{{const o=document.createElement('option');if(typeof v==='object'&&v.val!==undefined){{o.value=v.val;o.textContent=v.label;}}else{{o.value=o.textContent=v;}}s.appendChild(o)}});
-  if(p)s.value=p;
-}}
 function aplicar(){{
-  const e=document.getElementById('fe').value,m=document.getElementById('fm').value;
-  const t=document.getElementById('ft').value,c=document.getElementById('fc').value;
   const b=document.getElementById('busca').value.trim().toLowerCase();
   fil=ALL.filter(r=>{{
-    if(e&&String(r.EXERCICIO)!==e)return false;
-    if(m&&String(r.MES)!==m)return false;
-    if(ugSel&&r.COUG!==ugSel)return false;
-    if(t&&r.TIPO_AGREGACAO!==t)return false;
-    if(c&&String(r.CONTA_CONTABIL)!==c)return false;
+    if(acState['g'].sel&&r.COGESTAO!==acState['g'].sel)return false;
+    if(acState['u'].sel&&r.COUG!==acState['u'].sel)return false;
+    if(acState['c'].sel&&r.CONTA_CONTABIL!==acState['c'].sel)return false;
     if(filtrarNZ&&Math.abs(r.SALDO)<0.005)return false;
-    if(b&&!r.UNIDADE_GESTORA.toLowerCase().includes(b)&&!String(r.CONTA_CONTABIL).toLowerCase().includes(b)&&!r.COUG.toLowerCase().includes(b))return false;
+    if(b&&!r.GESTAO_LABEL.toLowerCase().includes(b)&&!r.UNIDADE_GESTORA.toLowerCase().includes(b)&&!r.CONTA_LABEL.toLowerCase().includes(b))return false;
     return true;
   }});
   if(sCol)doSort();pg=1;render();kpis();
 }}
 function limpar(){{
-  ['fe','fm','ft','fc'].forEach(id=>document.getElementById(id).value='');
-  document.getElementById('busca').value='';limparUG();
+  document.getElementById('busca').value='';
+  ['g','u','c'].forEach(k=>limparAC(k));
   if(filtrarNZ)toggleNZ();
 }}
 function sort(col,th){{
@@ -313,21 +348,21 @@ function render(){{
   const tb=document.getElementById('tbody'),tf=document.getElementById('tfoot');
   const nz=fil.filter(r=>Math.abs(r.SALDO)>=0.005).length;
   document.getElementById('cnt').textContent=fil.length.toLocaleString('pt-BR')+' registro'+(fil.length!==1?'s':'')+(nz>0?' · '+nz.toLocaleString('pt-BR')+' com saldo ≠ 0':'');
-  if(!fil.length){{tb.innerHTML='<tr><td colspan="6" class="empty">Nenhum registro com os filtros selecionados.</td></tr>';tf.innerHTML='';document.getElementById('pag').innerHTML='';return;}}
+  if(!fil.length){{tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro com os filtros selecionados.</td></tr>';tf.innerHTML='';document.getElementById('pag').innerHTML='';return;}}
   const rows=fil.slice((pg-1)*PS,pg*PS);
   tb.innerHTML=rows.map(r=>{{
     const p=Math.abs(r.SALDO)>=0.005;
+    const sep=r.CONTA_LABEL.indexOf(' - ');
+    const contaHtml=sep>=0?`<strong>${{r.CONTA_LABEL.slice(0,sep)}}</strong> — ${{r.CONTA_LABEL.slice(sep+2)}}`:r.CONTA_LABEL;
     return`<tr class="${{p?'pendente':''}}">
+      <td>${{r.GESTAO_LABEL}}</td>
       <td>${{r.UNIDADE_GESTORA}}</td>
-      <td>${{r.TIPO_AGREGACAO||'—'}}</td>
-      <td class="right">${{r.EXERCICIO}}</td>
-      <td class="right">${{MESES[r.MES]||r.MES}}</td>
-      <td class="mono right">${{r.CONTA_CONTABIL}}</td>
+      <td>${{contaHtml}}</td>
       <td class="right ${{vnz(r.SALDO)}}">${{brl(r.SALDO)}}</td>
     </tr>`;
   }}).join('');
   const st=fil.reduce((a,r)=>a+r.SALDO,0);
-  tf.innerHTML=`<tr><td colspan="5">Totais (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vnz(st)}}">${{brl(st)}}</td></tr>`;
+  tf.innerHTML=`<tr><td colspan="3">Totais (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vnz(st)}}">${{brl(st)}}</td></tr>`;
   paginar();
 }}
 function kpis(){{
@@ -341,7 +376,7 @@ function kpis(){{
   const kc=nz===0?'ko':nz<fil.length*0.1?'kw':'ka';
   document.getElementById('krow').innerHTML=`
     <div class="kpi"><div class="kl">Total de Registros</div><div class="kv">${{fil.length.toLocaleString('pt-BR')}}</div><div class="ks">${{ugs}} UG${{ugs!==1?'s':''}} · ${{contas}} conta${{contas!==1?'s':''}}</div></div>
-    <div class="kpi ${{kc}}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${{nz>0?'var(--red)':'var(--green)}}">${{nz.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge ${{nz>0?'br':'bg'}}">${{pct}}% dos registros</span></div></div>
+    <div class="kpi ${{kc}}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${{nz>0?'var(--red)':'var(--green)'}}">${{nz.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge ${{nz>0?'br':'bg'}}">${{pct}}% dos registros</span></div></div>
     <div class="kpi ko"><div class="kl">Zerados (OK)</div><div class="kv" style="color:var(--green)">${{ok.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge bg">${{(100-parseFloat(pct)).toFixed(1)}}% dos registros</span></div></div>
     <div class="kpi ${{Math.abs(st)<0.01?'ko':'ka'}}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${{vnz(st)}}">${{brl(st)}}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
 }}
@@ -360,13 +395,16 @@ function paginar(){{
 function ir(p){{const pages=Math.ceil(fil.length/PS);if(p<1||p>pages)return;pg=p;render();window.scrollTo({{top:0,behavior:'smooth'}})}}
 function exportar(){{
   if(!fil.length)return alert('Nenhum dado para exportar.');
-  const cols=['COUG','UNIDADE_GESTORA','TIPO_AGREGACAO','EXERCICIO','MES','CONTA_CONTABIL','SALDO'];
-  const linhas=[cols.join(';'),...fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]).join(';'))];
+  const cols=['COGESTAO','NOGESTAO','COUG','UNIDADE_GESTORA','CONTA_CONTABIL','NOCONTACONTABIL','SALDO'];
+  const hdr=['Gestao','Nome Gestao','Cod UG','Unidade Gestora','Conta Contabil','Nome Conta','Saldo'];
+  const linhas=[hdr.join(';'),...fil.map(r=>cols.map(c=>typeof r[c]==='number'?String(r[c]).replace('.',','):r[c]??'').join(';'))];
   const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['﻿'+linhas.join('\n')],{{type:'text/csv;charset=utf-8'}})),download:'contas_transitorias.csv'}});
   a.click();URL.revokeObjectURL(a.href);
 }}
-['fe','fm','ft','fc'].forEach(id=>document.getElementById(id).addEventListener('change',aplicar));
-init();
+window.onACInput=onACInput;window.onACFocus=onACFocus;window.onACBlur=onACBlur;
+window.selAC=selAC;window.limparAC=limparAC;
+window.toggleNZ=toggleNZ;window.aplicar=aplicar;window.limpar=limpar;window.sort=sort;window.ir=ir;window.exportar=exportar;
+aplicar();
 </script>
 </body>
 </html>"""
@@ -391,9 +429,9 @@ def extrair(ug: str | None, ano: str | None = None) -> pd.DataFrame:
             df = pd.DataFrame(cur.fetchall(), columns=colunas)
 
     df["SALDO"] = pd.to_numeric(df["SALDO"], errors="coerce").fillna(0)
-    df["MES"]   = df["MES"].astype(int)
     df["CONTA_CONTABIL"] = df["CONTA_CONTABIL"].astype(str)
     df["COUG"] = df["COUG"].astype(str)
+    df["COGESTAO"] = df["COGESTAO"].astype(str).str.zfill(6)
 
     print(f"[{datetime.now():%H:%M:%S}] {len(df):,} registros retornados.")
     return df
@@ -469,11 +507,11 @@ def main() -> None:
         return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     com_saldo = int((df["SALDO"].abs() > 0.005).sum())
-    print("\n── Resumo ─────────────────────────────────────────────────────────")
+    print("\n-- Resumo ----------------------------------------------------------")
     print(f"  Total de registros    : {len(df):,}")
-    print(f"  Com saldo ≠ 0         : {com_saldo:,} de {len(df):,}")
+    print(f"  Com saldo != 0        : {com_saldo:,} de {len(df):,}")
     print(f"  Saldo total           : {brl(float(df['SALDO'].sum()))}")
-    print("───────────────────────────────────────────────────────────────────\n")
+    print("-------------------------------------------------------------------\n")
 
 
 if __name__ == "__main__":
