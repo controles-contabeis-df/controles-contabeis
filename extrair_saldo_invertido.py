@@ -48,7 +48,6 @@ SELECT
     NVL(UG.NOUG, 'Sem nome')                                               AS NOUG,
     CONTACONTABIL.NOCONTACONTABIL,
     CONTACONTABIL.INSISCONTABIL,
-    CONTACONTABIL.ININVERSAOSALDO,
     SALDO.COCONTACONTABIL,
     SALDO.COCONTACORRENTE,
     CASE
@@ -68,7 +67,8 @@ FROM
     LEFT JOIN {SCHEMA}GESTAO g
         ON g.COGESTAO = SALDO.COGESTAO
 WHERE
-    CONTACONTABIL.COCONTACONTABIL BETWEEN 100000000 AND 899999999
+    CONTACONTABIL.ININVERSAOSALDO = 'N'
+    AND CONTACONTABIL.COCONTACONTABIL BETWEEN 100000000 AND 899999999
     AND CONTACONTABIL.INESCRITURACAO = 'S'
     AND CONTACONTABIL.INSALDOCONTABIL IN ('D', 'C')
     {{filtro_ug}}
@@ -234,13 +234,6 @@ tr.grp-l5:nth-child(even) td{{background:var(--row-alt)}}
       <option value="Contas Patrimoniais">Contas Patrimoniais</option>
     </select>
   </div>
-  <div class="fg"><label>Conta Inverte Saldo</label>
-    <select id="fcis">
-      <option value="">Todos</option>
-      <option value="S">Sim</option>
-      <option value="N">Não</option>
-    </select>
-  </div>
   <div class="bgrp">
     <button class="btn btn-g" onclick="limpar()">↺ Limpar filtros</button>
     <button class="btn btn-p" onclick="exportar()">⬇ Exportar CSV</button>
@@ -342,11 +335,9 @@ let fil=[];
 
 function aplicar(){{
   const grupo=document.getElementById('fg-grupo').value;
-  const cis  =document.getElementById('fcis').value;
   const b    =document.getElementById('busca').value.trim().toLowerCase();
   fil=ALL.filter(r=>{{
     if(grupo&&r.GRUPO!==grupo)return false;
-    if(cis&&r.ININVERSAOSALDO!==cis)return false;
     if(acState['g'].sel&&r.COGESTAO!==acState['g'].sel)return false;
     if(acState['u'].sel&&r.COUG!==acState['u'].sel)return false;
     if(acState['c'].sel&&r.COCONTACONTABIL!==acState['c'].sel)return false;
@@ -358,7 +349,6 @@ function aplicar(){{
 
 function limpar(){{
   document.getElementById('fg-grupo').value='';
-  document.getElementById('fcis').value='';
   document.getElementById('busca').value='';
   ['g','u','c'].forEach(k=>limparAC(k));
   aplicar();
@@ -372,7 +362,6 @@ function fillSel(id,vals){{
 
 function init(){{
   document.getElementById('fg-grupo').addEventListener('change',aplicar);
-  document.getElementById('fcis').addEventListener('change',aplicar);
   aplicar();
 }}
 
