@@ -92,7 +92,9 @@ saldos AS (
 )
 SELECT
     s.COGESTAO,
+    NVL(g.NOGESTAO, 'Sem nome')                           AS NOGESTAO,
     s.COUG,
+    NVL(ug.NOUG, 'Sem nome')                              AS NOUG,
     s.COFONTE,
     NVL(ft.INFONTETESOURO, 'N')  AS INFONTETESOURO,
     NVL(ft.INDESTINACAO,   0)    AS INDESTINACAO,
@@ -104,6 +106,8 @@ SELECT
     ROUND((s.AF - s.PF - s.RPNP) - s.CONTA_721190300, 2) AS DIFERENCA
 FROM saldos s
 LEFT JOIN {schema}FONTERECURSO ft ON ft.COFONTE = s.COFONTE
+LEFT JOIN {schema}GESTAO g ON g.COGESTAO = s.COGESTAO
+LEFT JOIN {schema}UNIDADEGESTORA ug ON ug.COUG = s.COUG
 ORDER BY s.COGESTAO, s.COUG, s.COFONTE
 """
 
@@ -138,16 +142,16 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
 .fg select{border:1.5px solid var(--border);border-radius:6px;padding:7px 28px 7px 10px;font-size:12.5px;min-width:150px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7a99' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--text);cursor:pointer;appearance:none}
 .fg select:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
-.ug-wrap{position:relative;min-width:200px}
-.ug-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}
-.ug-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
-.ug-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}
-.ug-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
-.ug-dd-item{padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border)}
-.ug-dd-item:last-child{border-bottom:none}
-.ug-dd-item:hover{background:var(--hover)}
-.ug-dd-item strong{color:var(--navy);font-weight:700}
-.ug-dd-empty{padding:12px;color:var(--muted);font-size:12px;text-align:center}
+.ac-wrap{position:relative;min-width:200px}
+.ac-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}
+.ac-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
+.ac-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}
+.ac-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
+.ac-dd-item{padding:8px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--border)}
+.ac-dd-item:last-child{border-bottom:none}
+.ac-dd-item:hover{background:var(--hover)}
+.ac-dd-item strong{color:var(--navy);font-weight:700}
+.ac-dd-empty{padding:12px;color:var(--muted);font-size:12px;text-align:center}
 .btns{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
 .btn{border:none;border-radius:6px;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:opacity .15s;white-space:nowrap}
 .btn:hover{opacity:.85}
@@ -216,11 +220,23 @@ tfoot tr td:first-child{text-align:left}
 </header>
 
 <div class="fbar">
-  <div class="fg ug-wrap" style="min-width:220px">
+  <div class="fg">
+    <label>Gestão</label>
+    <div class="ac-wrap">
+      <input id="fg-input" class="ac-input" type="text" placeholder="Código ou nome…" autocomplete="off"
+             oninput="onACInput('g')" onfocus="onACFocus('g')" onblur="onACBlur('g')">
+      <button class="ac-clear" id="fg-clear" onclick="limparAC('g')" title="Limpar">✕</button>
+      <div class="ac-dd" id="fg-dd"></div>
+    </div>
+  </div>
+  <div class="fg">
     <label>Unidade Gestora</label>
-    <input class="ug-input" id="ug-inp" placeholder="Código ou nome..." autocomplete="off" oninput="ugInput()" onfocus="ugInput()">
-    <button class="ug-clear" id="ug-clr" onclick="limparUG()">✕</button>
-    <div class="ug-dd" id="ug-dd"></div>
+    <div class="ac-wrap" style="min-width:220px">
+      <input id="fu-input" class="ac-input" type="text" placeholder="Código ou nome…" autocomplete="off"
+             oninput="onACInput('u')" onfocus="onACFocus('u')" onblur="onACBlur('u')">
+      <button class="ac-clear" id="fu-clear" onclick="limparAC('u')" title="Limpar">✕</button>
+      <div class="ac-dd" id="fu-dd"></div>
+    </div>
   </div>
   <div class="fg">
     <label>Mês</label>
@@ -304,8 +320,8 @@ tfoot tr td:first-child{text-align:left}
 
 <script>
 const DADOS_B64={dados_b64};
-const UGS_B64='{ugs_b64}';
-let ALL=[],UGS={},CACHE={},mesSel='',fil=[],ugSel='';
+let ALL=[],CACHE={},mesSel='',fil=[];
+let gestaoList=[],ugList=[],acState={};
 const NOMES_MES=['Saldo Inicial','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro','Encerramento do Exercício','Encerramento do Exercício'];
 const nomeMes=m=>{const n=Number(m);return(n>=0&&n<=14)?n+' · '+NOMES_MES[n]:String(m);};
 const brl=v=>{if(isNaN(v))return'—';const r=Math.round(Number(v)*100)/100;return(r||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});};
@@ -336,8 +352,8 @@ async function carregarMes(mes){
 
 (async()=>{
   try{
-    const[todosData,ugsData]=await Promise.all([decomp(DADOS_B64['']),decomp(UGS_B64)]);
-    CACHE['']=todosData;ALL=todosData;UGS=ugsData;
+    const todosData=await decomp(DADOS_B64['']);
+    CACHE['']=todosData;ALL=todosData;
   }catch(e){
     console.error('Erro ao descomprimir:',e);
     document.getElementById('ldg').innerHTML='<div style="color:#c0392b;padding:40px;text-align:center">Erro ao carregar dados.<br>Recarregue a página.</div>';
@@ -347,36 +363,53 @@ async function carregarMes(mes){
   init();
 })();
 
-/* ── UG dropdown ── */
-function ugInput(){
-  const v=document.getElementById('ug-inp').value.trim().toLowerCase();
-  const dd=document.getElementById('ug-dd');
-  document.getElementById('ug-clr').style.display=v?'block':'none';
-  if(!v){dd.style.display='none';ugSel='';aplicar();return;}
-  const matches=Object.entries(UGS).filter(([k,n])=>k.includes(v)||n.toLowerCase().includes(v)).slice(0,30);
-  if(!matches.length){dd.innerHTML='<div class="ug-dd-empty">Nenhuma UG encontrada</div>';dd.style.display='block';return;}
-  dd.innerHTML=matches.map(([k,n])=>'<div class="ug-dd-item" onclick="selUG(\''+k+'\',\''+n.replace(/'/g,"\\'")+'\')" ><strong>'+k+'</strong> — '+n+'</div>').join('');
+/* ── Autocomplete (Gestão / UG) ── */
+function onACInput(k){
+  const st=acState[k],v=document.getElementById(st.inp).value.toLowerCase();
+  const m=v?st.list.filter(x=>x.c.includes(v)||x.label.toLowerCase().includes(v)):st.list;
+  renderACDD(k,m);if(!v){st.sel='';document.getElementById(st.clr).style.display='none';}
+}
+function onACFocus(k){
+  const st=acState[k],v=document.getElementById(st.inp).value.toLowerCase();
+  renderACDD(k,v?st.list.filter(x=>x.c.includes(v)||x.label.toLowerCase().includes(v)):st.list);
+}
+function onACBlur(k){setTimeout(()=>document.getElementById(acState[k].dd).style.display='none',200);}
+function renderACDD(k,lista){
+  const dd=document.getElementById(acState[k].dd);
+  if(!lista.length){dd.innerHTML='<div class="ac-dd-empty">Nenhum resultado</div>';dd.style.display='block';return;}
+  dd.innerHTML=lista.slice(0,100).map(x=>{
+    const sep=x.label.indexOf(' · ');
+    const disp=sep>=0?'<strong>'+x.label.slice(0,sep)+'</strong> · '+x.label.slice(sep+3):x.label;
+    return '<div class="ac-dd-item" onmousedown="selAC(\''+k+'\',\''+x.c+'\',\''+x.label.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+disp+'</div>';
+  }).join('');
   dd.style.display='block';
 }
-function selUG(k,n){
-  ugSel=k;
-  document.getElementById('ug-inp').value=k+' — '+n;
-  document.getElementById('ug-clr').style.display='block';
-  document.getElementById('ug-dd').style.display='none';
+function selAC(k,c,label){
+  const st=acState[k];st.sel=c;
+  document.getElementById(st.inp).value=label;
+  document.getElementById(st.dd).style.display='none';
+  document.getElementById(st.clr).style.display='block';
   aplicar();
 }
-function limparUG(){ugSel='';document.getElementById('ug-inp').value='';document.getElementById('ug-clr').style.display='none';document.getElementById('ug-dd').style.display='none';aplicar();}
-document.addEventListener('click',function(e){if(!e.target.closest('.ug-wrap'))document.getElementById('ug-dd').style.display='none';});
+function limparAC(k){
+  const st=acState[k];st.sel='';
+  document.getElementById(st.inp).value='';
+  document.getElementById(st.clr).style.display='none';
+  document.getElementById(st.dd).style.display='none';
+  aplicar();
+}
+document.addEventListener('click',function(e){if(!e.target.closest('.ac-wrap')){document.getElementById('fg-dd').style.display='none';document.getElementById('fu-dd').style.display='none';}});
 
 /* ── Filtros ── */
 function aplicar(){
-  const fg=document.getElementById('ff').value;
+  const ff=document.getElementById('ff').value;
   const sd=document.getElementById('fs').value;
   const fft=document.getElementById('fft').value;
   const fdr=document.getElementById('fdr').value;
   fil=ALL.filter(r=>{
-    if(ugSel&&String(r.COUG)!==ugSel)return false;
-    if(fg&&String(r.COFONTE)!==fg)return false;
+    if(acState['g']&&acState['g'].sel&&String(r.COGESTAO)!==acState['g'].sel)return false;
+    if(acState['u']&&acState['u'].sel&&String(r.COUG)!==acState['u'].sel)return false;
+    if(ff&&String(r.COFONTE)!==ff)return false;
     if(fft&&String(r.INFONTETESOURO)!==fft)return false;
     if(fdr!==''&&String(r.INDESTINACAO)!==fdr)return false;
     if(sd==='dif_pos'&&r.DIFERENCA<=0)return false;
@@ -393,7 +426,13 @@ async function trocarMes(mes){
   document.getElementById('ldg').style.display='none';
   initFiltros();
 }
-function limpar(){document.getElementById('fm').value='';mesSel='';ALL=CACHE['']||[];document.getElementById('ff').value='';document.getElementById('fs').value='todos';document.getElementById('fft').value='';document.getElementById('fdr').value='';limparUG();}
+function limpar(){
+  document.getElementById('fm').value='';mesSel='';ALL=CACHE['']||[];
+  document.getElementById('ff').value='';document.getElementById('fs').value='todos';
+  document.getElementById('fft').value='';document.getElementById('fdr').value='';
+  ['g','u'].forEach(k=>{if(acState[k]){const st=acState[k];st.sel='';document.getElementById(st.inp).value='';document.getElementById(st.clr).style.display='none';document.getElementById(st.dd).style.display='none';}});
+  initFiltros();
+}
 
 function initFiltros(){
   const fontes=[...new Set(ALL.map(r=>String(r.COFONTE)))].sort();
@@ -404,7 +443,24 @@ function initFiltros(){
   sf.value=prevFonte;
   aplicar();
 }
-function init(){initFiltros();}
+function buildList(keyFn,labelFn){
+  const m={};
+  ALL.forEach(r=>{const k=keyFn(r);if(k&&!m[k])m[k]=labelFn(r);});
+  return Object.entries(m).map(([c,label])=>({c,label})).sort((a,b)=>a.c.localeCompare(b.c,'pt-BR'));
+}
+function init(){
+  ALL.forEach(r=>{
+    r.GESTAO_LABEL=r.COGESTAO+(r.NOGESTAO&&r.NOGESTAO!=='Sem nome'?' · '+r.NOGESTAO:'');
+    r.UG_LABEL=r.COUG+(r.NOUG&&r.NOUG!=='Sem nome'?' · '+r.NOUG:'');
+  });
+  gestaoList=buildList(r=>String(r.COGESTAO),r=>r.GESTAO_LABEL);
+  ugList=buildList(r=>String(r.COUG),r=>r.UG_LABEL);
+  acState={
+    'g':{sel:'',list:gestaoList,inp:'fg-input',clr:'fg-clear',dd:'fg-dd'},
+    'u':{sel:'',list:ugList,    inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}
+  };
+  initFiltros();
+}
 
 /* ── Helpers de soma e células ── */
 function soma(arr){
@@ -449,14 +505,16 @@ function render(){
     const tg=soma(todosG);
     const nUgG=Object.keys(ugMap).length;
     const gid='g_'+g;
+    const nomeG=todosG[0]&&todosG[0].NOGESTAO&&todosG[0].NOGESTAO!=='Sem nome'?todosG[0].NOGESTAO:'';
     html+='<tr class="row-gestao" onclick="toggle(\''+gid+'\')">'
-         +'<td><span class="tog" id="tog_'+gid+'">▶</span> GESTÃO '+g
+         +'<td><span class="tog" id="tog_'+gid+'">▶</span> GESTÃO '+g+(nomeG?' · '+nomeG:'')
          +' <span style="font-size:10px;opacity:.55">('+nUgG+' UG'+(nUgG!==1?'s':'')+')</span></td>'
          +'<td></td>'
          +valCols(tg)+'</tr>';
 
     Object.keys(ugMap).sort((a,b)=>Number(a)-Number(b)).forEach(u=>{
-      const fontes=ugMap[u],tu=soma(fontes),nome=UGS[u]||'';
+      const fontes=ugMap[u],tu=soma(fontes);
+      const nome=fontes[0]&&fontes[0].NOUG&&fontes[0].NOUG!=='Sem nome'?fontes[0].NOUG:'';
       const uid=gid+'_u'+u;
       html+='<tr class="row-ug" data-par="'+gid+'" style="display:none" onclick="toggle(\''+uid+'\')">'
            +'<td><span class="tog" id="tog_'+uid+'">▶</span> UG '+u+(nome?' · '+nome:'')
@@ -581,12 +639,10 @@ def _gzip_b64(data) -> str:
     return base64.b64encode(gzip.compress(j.encode("utf-8"), compresslevel=9)).decode("ascii")
 
 # ── Geração do HTML ─────────────────────────────────────────────────────────────
-def gerar_html(dados_por_mes: dict, ugs: dict) -> str:
+def gerar_html(dados_por_mes: dict) -> str:
     dados_b64 = {mes: _gzip_b64(_normalizar(recs)) for mes, recs in dados_por_mes.items()}
-    ugs_b64   = _gzip_b64(ugs)
     html = HTML_TEMPLATE
     html = html.replace('{dados_b64}', json.dumps(dados_b64, ensure_ascii=False))
-    html = html.replace('{ugs_b64}',   ugs_b64)
     html = html.replace('{timestamp}', datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
     return html
 
@@ -649,12 +705,7 @@ def main():
             except Exception as e:
                 print(f"erro: {e}")
 
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] Buscando nomes das UGs...")
-        ugs_df = pd.read_sql(f"SELECT COUG, NOUG FROM {SCHEMA}VUNIDADEGESTORA", conn)
-        ugs = {str(int(r.COUG)): r.NOUG for r in ugs_df.itertuples() if r.NOUG}
-        print(f"[{datetime.now().strftime('%H:%M:%S')}] {len(ugs):,} UGs carregadas.")
-
-    html = gerar_html(dados_por_mes, ugs)
+    html = gerar_html(dados_por_mes)
     out = Path(ARQUIVO_HTML)
     out.write_text(html, encoding="utf-8")
     tamanho_mb = out.stat().st_size / 1_048_576
