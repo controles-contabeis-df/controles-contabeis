@@ -324,6 +324,7 @@ let ALL=[],CACHE={},mesSel='',fil=[];
 let gestaoList=[],ugList=[],acState={};
 const NOMES_MES=['Saldo Inicial','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro','Encerramento do Exercício','Encerramento do Exercício'];
 const nomeMes=m=>{const n=Number(m);return(n>=0&&n<=14)?n+' · '+NOMES_MES[n]:String(m);};
+const fmtGestao=v=>String(v).padStart(5,'0');
 const brl=v=>{if(isNaN(v))return'—';const r=Math.round(Number(v)*100)/100;return(r||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});};
 const vc=v=>Math.abs(v)<0.005?'vz':v>0?'vp':'vn';
 
@@ -407,7 +408,7 @@ function aplicar(){
   const fft=document.getElementById('fft').value;
   const fdr=document.getElementById('fdr').value;
   fil=ALL.filter(r=>{
-    if(acState['g']&&acState['g'].sel&&String(r.COGESTAO)!==acState['g'].sel)return false;
+    if(acState['g']&&acState['g'].sel&&fmtGestao(r.COGESTAO)!==acState['g'].sel)return false;
     if(acState['u']&&acState['u'].sel&&String(r.COUG)!==acState['u'].sel)return false;
     if(ff&&String(r.COFONTE)!==ff)return false;
     if(fft&&String(r.INFONTETESOURO)!==fft)return false;
@@ -450,10 +451,10 @@ function buildList(keyFn,labelFn){
 }
 function init(){
   ALL.forEach(r=>{
-    r.GESTAO_LABEL=r.COGESTAO+(r.NOGESTAO&&r.NOGESTAO!=='Sem nome'?' · '+r.NOGESTAO:'');
+    r.GESTAO_LABEL=fmtGestao(r.COGESTAO)+(r.NOGESTAO&&r.NOGESTAO!=='Sem nome'?' · '+r.NOGESTAO:'');
     r.UG_LABEL=r.COUG+(r.NOUG&&r.NOUG!=='Sem nome'?' · '+r.NOUG:'');
   });
-  gestaoList=buildList(r=>String(r.COGESTAO),r=>r.GESTAO_LABEL);
+  gestaoList=buildList(r=>fmtGestao(r.COGESTAO),r=>r.GESTAO_LABEL);
   ugList=buildList(r=>String(r.COUG),r=>r.UG_LABEL);
   acState={
     'g':{sel:'',list:gestaoList,inp:'fg-input',clr:'fg-clear',dd:'fg-dd'},
@@ -488,7 +489,7 @@ function render(){
   /* montar árvore gestao -> ug -> fontes[] */
   const tree={};
   fil.forEach(r=>{
-    const g=String(r.COGESTAO),u=String(r.COUG);
+    const g=fmtGestao(r.COGESTAO),u=String(r.COUG);
     if(!tree[g])tree[g]={};
     if(!tree[g][u])tree[g][u]=[];
     tree[g][u].push(r);
