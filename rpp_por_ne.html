@@ -100,10 +100,10 @@ tr.acct-row.hidden{display:none}
 <body>
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">⚖️</div>
+    <div class="hlogo">🗂️</div>
     <h1>RPP por Nota de Empenho<span>SIGGO · Ano Exercício 2026</span></h1>
   </div>
-  <span id="ts">Atualizado em 04/08/2026 16:16:15</span>
+  <span id="ts">Atualizado em 04/08/2026 16:30:18</span>
 </header>
 <div class="fbar">
   <div class="fg">
@@ -375,7 +375,23 @@ function render() {
       const s827T = r.S_827110301 + r.S_827110303;
       const s632R = r.S_632110300 + r.S_632110400;
       const neKey = String(r.COUG) + '|' + r.NE;
-      const contas = DETALHE[neKey] || [];
+      const eps = 0.005;
+      const difA = Math.abs(r.DIF_A) >= eps;
+      const difB = Math.abs(r.DIF_B) >= eps;
+      const difC = Math.abs(r.DIF_C) >= eps;
+      const difD = Math.abs(r.DIF_D) >= eps;
+      // Só mostra conta no detalhe se a equivalência correspondente tiver divergência
+      const contas = (DETALHE[neKey] || []).filter(ct => {
+        const g = classifConta(ct.c);
+        if (g === 'ca') return difA;
+        if (g === 'cb') return difB;
+        if (g === 'a2') return difA || difC;  // 827110301: relevante para A e C
+        if (g === 'b2') return difB || difC;  // 827110303: relevante para B e C
+        if (g === 'c2') return difC;           // 632110300/400: só se C diverge
+        if (g === 'cd') return difD;
+        if (g === 'd2') return difD;           // 632110100
+        return true;
+      });
       const neid = uid + '_' + (r.NE || 'x').replace(/[^a-zA-Z0-9]/g, '_');
       const temDet = contas.length > 0;
 
