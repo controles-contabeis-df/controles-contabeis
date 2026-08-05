@@ -45,6 +45,7 @@ Executar-Script "extrair_empenhos_liquidar.py"
 Executar-Script "extrair_repasses.py"
 Executar-Script "extrair_empresas_independentes.py"
 Executar-Script "extrair_saldo_invertido.py"
+Executar-Script "extrair_rpp_por_ne.py"
 
 $rodape = @"
 ============================================================
