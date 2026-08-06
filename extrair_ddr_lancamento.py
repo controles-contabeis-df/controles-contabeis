@@ -895,6 +895,14 @@ def main() -> None:
         print(f"\nErro de banco de dados: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Filtrar apenas lancamentos que pertencem a documentos com diferenca liquida != 0
+    df['_key'] = (df['NUDOCUMENTO'].astype(str) + '|'
+                  + df['COGESTAO_EMIT'].astype(str) + '-'
+                  + df['COUG_EMIT'].astype(str))
+    docs_dif = df.groupby('_key')['DIFERENCA'].sum().abs()
+    df = df[df['_key'].isin(docs_dif[docs_dif >= 0.005].index)].drop(columns=['_key'])
+    print(f"[{datetime.now():%H:%M:%S}] Apos filtro (docs c/ diferenca): {len(df):,} lancamentos.")
+
     html = gerar_html(df, ugs)
     out = Path(__file__).parent / ARQUIVO_HTML
     out.write_text(html, encoding="utf-8")
@@ -905,11 +913,9 @@ def main() -> None:
         url = publicar_github(out)
         print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.\n  -> {url}")
 
-    dif_nz = int((df["DIFERENCA"].abs() >= 0.005).sum())
     print("\n-- Resumo -----------------------------------------------------------")
-    print(f"  Linhas retornadas   : {len(df):,}")
+    print(f"  Lançamentos no HTML : {len(df):,}  (apenas docs c/ diferença)")
     print(f"  UGs                 : {df['COUG'].nunique():,}")
-    print(f"  Com diferença != 0  : {dif_nz:,}")
     print(f"  Diferença total     : R$ {float(df['DIFERENCA'].sum()):,.2f}")
     print("---------------------------------------------------------------------\n")
 
