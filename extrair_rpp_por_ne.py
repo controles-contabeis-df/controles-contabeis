@@ -792,14 +792,15 @@ def main():
 
     import subprocess
     pasta = Path(__file__).parent
-    print(f"[{datetime.now():%H:%M:%S}] Publicando no GitHub...")
-    subprocess.run(["git", "-C", str(pasta), "add", ARQUIVO_HTML], check=True)
-    subprocess.run(["git", "-C", str(pasta), "commit", "-m",
-                    f"auto: atualiza {ARQUIVO_HTML} em {datetime.now():%d/%m/%Y %H:%M}"],
-                   check=True)
-    subprocess.run(["git", "-C", str(pasta), "push", "origin", "main"], check=True)
-    print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")
-    print(f"  -> https://controles-contabeis-df.github.io/controles-contabeis/{ARQUIVO_HTML}")
+    if not os.environ.get('NO_GIT_PUSH'):
+        print(f"[{datetime.now():%H:%M:%S}] Publicando no GitHub...")
+        subprocess.run(["git", "-C", str(pasta), "add", ARQUIVO_HTML], check=True)
+        subprocess.run(["git", "-C", str(pasta), "commit", "-m",
+                        f"auto: atualiza {ARQUIVO_HTML} em {datetime.now():%d/%m/%Y %H:%M}"],
+                       check=True)
+        subprocess.run(["git", "-C", str(pasta), "push", "origin", "main"], check=True)
+        print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")
+        print(f"  -> https://controles-contabeis-df.github.io/controles-contabeis/{ARQUIVO_HTML}")
 
 
 if __name__ == '__main__':

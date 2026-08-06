@@ -496,6 +496,8 @@ def gerar_html(df: pd.DataFrame) -> str:
 
 
 def publicar_github(caminho: str, mensagem_commit: str) -> None:
+    if os.environ.get('NO_GIT_PUSH'):
+        return
     pasta = Path(__file__).parent
     url_remote = f"https://{GITHUB_TOKEN}@github.com/{GITHUB_USER}/{GITHUB_REPO}.git"
 

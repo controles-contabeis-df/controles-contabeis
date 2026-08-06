@@ -868,6 +868,8 @@ def gerar_html(df: pd.DataFrame, ugs: dict) -> str:
 
 # ── Publicação GitHub (via git push) ───────────────────────────────────────────
 def publicar_github(html_path: Path) -> str:
+    if os.environ.get('NO_GIT_PUSH'):
+        return ''
     pasta = str(html_path.parent)
     msg = f"chore: atualiza DDR por lancamento — {datetime.now().strftime('%d/%m/%Y %H:%M')}"
     subprocess.run(["git", "-C", pasta, "add", html_path.name], check=True)

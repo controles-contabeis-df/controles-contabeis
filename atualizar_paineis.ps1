@@ -36,6 +36,9 @@ $gitMsg = "[$((Get-Date))] git pull --rebase --autostash"
 Write-Output $gitMsg; Add-Content -Path $log -Value $gitMsg
 $gitOut = git -C $pasta pull origin main --rebase --autostash 2>&1; $gitOut | ForEach-Object { Add-Content -Path $log -Value $_ }
 
+# Bloqueia pushes individuais dos scripts — um único push consolidado ao final
+$env:NO_GIT_PUSH = "1"
+
 Executar-Script "extrair_contas_transitorias.py"
 Executar-Script "extrair_disponibilidades.py"
 Executar-Script "extrair_disponibilidades_saldo.py"
@@ -46,6 +49,18 @@ Executar-Script "extrair_repasses.py"
 Executar-Script "extrair_empresas_independentes.py"
 Executar-Script "extrair_saldo_invertido.py"
 Executar-Script "extrair_rpp_por_ne.py"
+
+$env:NO_GIT_PUSH = ""
+
+# Push consolidado — dispara apenas UM build do GitHub Pages por dia
+$pushMsg = "[$((Get-Date))] Publicando todos os paineis no GitHub (push consolidado)..."
+Write-Output $pushMsg; Add-Content -Path $log -Value $pushMsg
+git -C $pasta add -A
+$commitMsg = "auto: atualiza paineis -- $(Get-Date -Format 'dd/MM/yyyy HH:mm')"
+git -C $pasta commit -m $commitMsg
+$pushOut = git -C $pasta push origin main 2>&1; $pushOut | ForEach-Object { Add-Content -Path $log -Value $_ }
+$pushOk = "[$((Get-Date))] Publicado com sucesso. -> https://controles-contabeis-df.github.io/controles-contabeis/"
+Write-Output $pushOk; Add-Content -Path $log -Value $pushOk
 
 $rodape = @"
 ============================================================
