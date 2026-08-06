@@ -649,6 +649,8 @@ def gerar_html(dados_por_mes: dict) -> str:
 
 # ── Publicação no GitHub ────────────────────────────────────────────────────────
 def publicar_github(html: str) -> str:
+    if os.environ.get('NO_GIT_PUSH'):
+        return ''
     import requests
     api = f"https://api.github.com/repos/{GITHUB_USER}/{GITHUB_REPO}/contents/{ARQUIVO_HTML}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}", "Accept": "application/vnd.github.v3+json"}

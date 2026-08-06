@@ -673,6 +673,8 @@ def gerar_html(df: pd.DataFrame, ugs: dict) -> str:
 
 # ── GitHub Pages ───────────────────────────────────────────────────────────────
 def publicar_github(caminho: str, mensagem_commit: str) -> None:
+    if os.environ.get('NO_GIT_PUSH'):
+        return
     import subprocess
 
     pasta = Path(__file__).parent
