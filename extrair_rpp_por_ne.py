@@ -789,7 +789,17 @@ def main():
     saida = Path(__file__).parent / ARQUIVO_HTML
     saida.write_text(html, encoding='utf-8')
     print(f"[{datetime.now():%H:%M:%S}] HTML salvo: {saida.name} ({saida.stat().st_size / 1024:.0f} KB)")
-    print(f"  -> Abra o arquivo localmente para visualizar.")
+
+    import subprocess
+    pasta = Path(__file__).parent
+    print(f"[{datetime.now():%H:%M:%S}] Publicando no GitHub...")
+    subprocess.run(["git", "-C", str(pasta), "add", ARQUIVO_HTML], check=True)
+    subprocess.run(["git", "-C", str(pasta), "commit", "-m",
+                    f"auto: atualiza {ARQUIVO_HTML} em {datetime.now():%d/%m/%Y %H:%M}"],
+                   check=True)
+    subprocess.run(["git", "-C", str(pasta), "push", "origin", "main"], check=True)
+    print(f"[{datetime.now():%H:%M:%S}] Publicado com sucesso.")
+    print(f"  -> https://controles-contabeis-df.github.io/controles-contabeis/{ARQUIVO_HTML}")
 
 
 if __name__ == '__main__':
