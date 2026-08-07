@@ -49,6 +49,7 @@ Executar-Script "extrair_repasses.py"
 Executar-Script "extrair_empresas_independentes.py"
 Executar-Script "extrair_saldo_invertido.py"
 Executar-Script "extrair_rpp_por_ne.py"
+Executar-Script "extrair_conciliacao_sisgepat.py"
 
 $env:NO_GIT_PUSH = ""
 
