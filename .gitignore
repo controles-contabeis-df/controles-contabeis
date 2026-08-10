@@ -10,7 +10,9 @@ logs/
 # Backups e arquivos temporários
 backup_*/
 *_backup_*.py
+*.bak
 
 # Arquivos de referência/documentação local (não fazem parte do site)
 Controle_*.txt
 Controle_*.png
+Regras_*.png

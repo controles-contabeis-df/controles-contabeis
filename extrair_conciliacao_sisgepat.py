@@ -31,7 +31,7 @@ ARQUIVO_HTML  = "conciliacao_sisgepat.html"
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
 # ── Carrega módulo de conciliação (lógica de negócio) ─────────────────────────
-_CORE_PATH = Path(__file__).parent.parent / "Concilicacao_SISGEPAT" / "conciliacao_siggo_sisgepat (1).py"
+_CORE_PATH = Path(__file__).parent.parent / "Concilicacao_SISGEPAT" / "conciliacao_siggo_sisgepat.py"
 _spec = importlib.util.spec_from_file_location("conciliacao_core", str(_CORE_PATH))
 _core = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_core)
@@ -59,6 +59,9 @@ def extrair(mes, ano):
     df_t, df_e, df_o, df_s1, df_si = _core.extrair_via_oracle(data_corte, mes, ano)
     print(f"[{datetime.now():%H:%M:%S}] Montando base…")
     base      = _core.montar_base_sisgepat(df_t, df_e, df_o)
+    # Regra 7 corrigida: obras sem terreno → 123211000 MOBILIÁRIO URBANO (não PRÉDIOS)
+    mask_r7 = (base["TIPO"] == "O") & (base["COD"] == "00") & (base["_T"] == "O")
+    base.loc[mask_r7, "CONTA_SISGEPAT"] = "123211000"
     siggo_ug, siggo_total, siggo_tomb = _core.montar_base_siggo(df_s1, df_si)
     quadro    = _core.montar_quadro_conciliacao(base, siggo_ug)
 
@@ -77,15 +80,23 @@ def extrair(mes, ano):
     )
     quadro["GESTAO"] = quadro["UG"].map(ug_gestao).fillna("000000")
 
-    # Buscar nome das gestões
+    # Buscar nome e INTIPOADM das gestões; filtrar quadro
     try:
         with oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN) as _gc:
             _cursor = _gc.cursor()
-            _cursor.execute("SELECT COGESTAO, NOGESTAO FROM MIL2026.GESTAO WHERE NOGESTAO IS NOT NULL")
-            _gest_map = {str(int(float(str(r[0])))).zfill(6): str(r[1]).strip() for r in _cursor if r[0] is not None}
+            _cursor.execute("SELECT COGESTAO, NOGESTAO, INTIPOADM FROM MIL2026.GESTAO")
+            _gest_rows = [r for r in _cursor if r[0] is not None]
+        _gest_map  = {str(int(float(str(r[0])))).zfill(6): str(r[1]).strip() if r[1] else "" for r in _gest_rows}
+        _gest_tipo = {str(int(float(str(r[0])))).zfill(6): str(r[2]).strip() if r[2] else "" for r in _gest_rows}
     except Exception:
-        _gest_map = {}
+        _gest_map  = {}
+        _gest_tipo = {}
     quadro["NOGESTAO"] = quadro["GESTAO"].map(_gest_map).fillna("")
+    # Manter apenas gestões com INTIPOADM = '1' (Direta/Tesouro) ou '7' (Fundo)
+    # e excluir explicitamente a UG 010101 (Câmara Legislativa)
+    quadro["_TIPO"] = quadro["GESTAO"].map(_gest_tipo).fillna("")
+    quadro = quadro[quadro["_TIPO"].isin(["1", "7"])].drop(columns=["_TIPO"]).copy()
+    quadro = quadro[quadro["UG"] != "010101"].copy()
 
     eventos   = _core.montar_eventos_pendentes(base, siggo_tomb)
     transf    = _core.montar_transferencias_pendentes(base, siggo_tomb)
@@ -135,8 +146,7 @@ def _embed(data):
 def gerar_html(quadro, eventos, transf, achados, siggo_tomb, mes, ano):  # noqa: C901
     tot_sis   = float(quadro["SISGEPAT_VALOR"].sum())
     tot_sig   = float(quadro["SIGGO_VALOR"].sum())
-    q_conc    = quadro[(quadro["TIPO_UG"] == "Direta") & (quadro["CATEGORIA"] == "SISGEPAT")]
-    div_reais = float(q_conc["DIFERENCA"].sum())
+    div_reais = float(quadro["DIFERENCA"].sum())
 
     mes_label = MESES[mes]
     meta = dict(ano=ano, mes=mes, mes_label=mes_label, tot_sis=tot_sis, tot_sig=tot_sig,
@@ -147,9 +157,8 @@ def gerar_html(quadro, eventos, transf, achados, siggo_tomb, mes, ano):  # noqa:
 
     quadro_rows = _q(quadro.rename(columns={
         "NOME_UG": "NOME", "DESCRICAO_CONTA": "DESC",
-        "SISGEPAT_VALOR": "SIS", "SIGGO_VALOR": "SIG", "DIFERENCA": "DIF",
-        "NOGESTAO": "NOGEST"}),
-        ["GESTAO", "NOGEST", "UG", "NOME", "CONTA", "DESC", "SIS", "SIG", "DIF"])
+        "SISGEPAT_VALOR": "SIS", "SIGGO_VALOR": "SIG", "DIFERENCA": "DIF"}),
+        ["UG", "NOME", "CONTA", "DESC", "SIS", "SIG", "DIF"])
 
     b64_meta   = _embed(meta)
     b64_quadro = _embed(quadro_rows)
@@ -198,6 +207,8 @@ header h1 span{{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-
 .btn:hover{{filter:brightness(1.08);transform:translateY(-1px)}}
 .btn-p{{background:var(--teal);color:#fff}}
 .btn-g{{background:var(--border);color:var(--text)}}
+.btn-r{{background:var(--red);color:#fff}}
+.btn-y{{background:#d4820a;color:#fff}}
 .mes-badge{{background:var(--navy);color:#c8d8ec;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;letter-spacing:.3px;white-space:nowrap}}
 .tsec{{padding:16px 28px 32px}}
 .thead-row{{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}}
@@ -216,18 +227,15 @@ tbody tr:hover td{{background:var(--hover)!important}}
 td{{padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}}
 td.right{{text-align:right}}
 .vneg{{color:var(--red);font-weight:700}}
-.vpos{{color:var(--green)}}
+.vpos{{color:var(--green);font-weight:700}}
 tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px}}
 .empty{{text-align:center;padding:56px;color:var(--muted)}}
 tr.grp-l1{{background:var(--navy);cursor:pointer}}
-tr.grp-l1 td{{color:#e8f0fc;font-weight:700;padding:10px 14px}}
+tr.grp-l1 td{{color:#e8f0fc;font-weight:700;padding:9px 14px}}
 tr.grp-l1:hover td{{background:var(--navy-mid)!important}}
-tr.grp-l2{{background:#1e3267;cursor:pointer}}
-tr.grp-l2 td{{color:#c8d8ec;font-weight:700;padding:9px 14px 9px 28px}}
-tr.grp-l2:hover td{{background:#162550!important}}
-tr.grp-l3 td{{padding:8px 14px 8px 42px;background:var(--surface)}}
-tr.grp-l3:nth-child(even) td{{background:var(--row-alt)}}
-tr.grp-l3:hover td{{background:var(--hover)!important}}
+tr.grp-l2 td{{padding:8px 14px 8px 28px;background:var(--surface)}}
+tr.grp-l2:nth-child(even) td{{background:var(--row-alt)}}
+tr.grp-l2:hover td{{background:var(--hover)!important}}
 .tog{{margin-right:6px;font-style:normal;display:inline-block;width:12px}}
 </style>
 </head>
@@ -247,13 +255,6 @@ tr.grp-l3:hover td{{background:var(--hover)!important}}
   <div class="fg"><label>M&#234;s de Refer&#234;ncia</label>
     <div class="mes-badge" id="mes-ref">—</div>
   </div>
-  <div class="fg"><label>Gest&#227;o</label>
-    <div class="ac-wrap">
-      <input id="fg-input" class="ac-input" type="text" placeholder="C&#243;digo ou nome..." autocomplete="off" oninput="onAC('g')" onfocus="onAC('g')" onblur="offAC('g')">
-      <button class="ac-clear" id="fg-clear" onclick="limAC('g')" title="Limpar">&#x2715;</button>
-      <div class="ac-dd" id="fg-dd"></div>
-    </div>
-  </div>
   <div class="fg"><label>Unidade Gestora</label>
     <div class="ac-wrap" style="min-width:280px">
       <input id="fu-input" class="ac-input" type="text" placeholder="C&#243;digo ou nome..." autocomplete="off" oninput="onAC('u')" onfocus="onAC('u')" onblur="offAC('u')">
@@ -269,7 +270,8 @@ tr.grp-l3:hover td{{background:var(--hover)!important}}
     </div>
   </div>
   <div class="bgrp">
-    <button class="btn btn-g" id="btn-dif" onclick="toggleDif()">&#x26A0; Somente Diferen&#231;as</button>
+    <button class="btn btn-r" id="btn-dif" onclick="toggleDif()">&#x26A0; Somente Diferen&#231;as</button>
+    <button class="btn btn-y" id="btn-conc" onclick="toggleConc()">&#x25CF; Somente contas concili&#225;veis</button>
     <button class="btn btn-g" onclick="expandAll()">&#x25BC; Expandir tudo</button>
     <button class="btn btn-g" onclick="collapseAll()">&#x25B2; Recolher tudo</button>
     <button class="btn btn-g" onclick="limpar()">&#x21BA; Limpar filtros</button>
@@ -283,7 +285,7 @@ tr.grp-l3:hover td{{background:var(--hover)!important}}
   </div>
   <div class="tw"><table>
     <thead><tr>
-      <th>Gest&#227;o / Unidade Gestora / Conta Cont&#225;bil</th>
+      <th>Unidade Gestora / Conta Cont&#225;bil</th>
       <th class="right">SISGEPAT</th>
       <th class="right">SIGGO</th>
       <th class="right">Diferen&#231;a</th>
@@ -308,46 +310,59 @@ function offAC(k){{setTimeout(()=>document.getElementById(acState[k].dd).style.d
 function selAC(k,c,label){{const st=acState[k];st.sel=c;document.getElementById(st.inp).value=label;document.getElementById(st.dd).style.display='none';document.getElementById(st.clr).style.display='block';aplicar();}}
 function limAC(k){{const st=acState[k];st.sel='';document.getElementById(st.inp).value='';document.getElementById(st.clr).style.display='none';aplicar();}}
 let _somenteDif=false;
-function aplicar(){{const b=document.getElementById('busca').value.trim().toLowerCase();fil=ALL.filter(r=>{{if(acState['g'].sel&&r.GESTAO!==acState['g'].sel)return false;if(acState['u'].sel&&r.UG!==acState['u'].sel)return false;if(acState['c'].sel&&r.CONTA!==acState['c'].sel)return false;if(_somenteDif&&Math.abs(r.DIF||0)<0.005)return false;if(b&&!(r.GESTAO_LABEL||'').toLowerCase().includes(b)&&!(r.UG_LABEL||'').toLowerCase().includes(b)&&!(r.CONTA_LABEL||'').toLowerCase().includes(b))return false;return true;}});render();}}
-function toggleDif(){{_somenteDif=!_somenteDif;const btn=document.getElementById('btn-dif');btn.style.background=_somenteDif?'var(--red)':'';btn.style.color=_somenteDif?'#fff':'';aplicar();}}
-function expandAll(){{document.querySelectorAll('tr.grp-l1,tr.grp-l2').forEach(r=>{{const id=r.dataset.id;if(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(c=>c.style.display='');r.querySelector('.tog').innerHTML='▼';}}}}); }}
-function collapseAll(){{document.querySelectorAll('tr.grp-l2,tr.grp-l3').forEach(r=>r.style.display='none');document.querySelectorAll('.tog').forEach(t=>t.innerHTML='▶');}}
-function limpar(){{document.getElementById('busca').value='';['g','u','c'].forEach(k=>limAC(k));_somenteDif=false;const b=document.getElementById('btn-dif');b.style.background='';b.style.color='';aplicar();}}
+let _somenteConciliaveis=false;
+const CONTAS_CONC=new Set(['123210800','123210900','123211000','123219000','123219100']);
+function aplicar(){{const b=document.getElementById('busca').value.trim().toLowerCase();fil=ALL.filter(r=>{{if(acState['u'].sel&&r.UG!==acState['u'].sel)return false;if(acState['c'].sel&&r.CONTA!==acState['c'].sel)return false;if(_somenteDif&&Math.abs(r.DIF||0)<0.005)return false;if(_somenteConciliaveis&&!CONTAS_CONC.has(r.CONTA))return false;if(b&&!(r.UG_LABEL||'').toLowerCase().includes(b)&&!(r.CONTA_LABEL||'').toLowerCase().includes(b))return false;return true;}});render();}}
+function toggleDif(){{_somenteDif=!_somenteDif;const btn=document.getElementById('btn-dif');btn.style.filter=_somenteDif?'brightness(0.75)':'';btn.style.boxShadow=_somenteDif?'inset 0 2px 5px rgba(0,0,0,.35)':'';aplicar();}}
+function toggleConc(){{_somenteConciliaveis=!_somenteConciliaveis;const btn=document.getElementById('btn-conc');btn.style.filter=_somenteConciliaveis?'brightness(0.80)':'';btn.style.boxShadow=_somenteConciliaveis?'inset 0 2px 5px rgba(0,0,0,.30)':'';aplicar();}}
+function expandAll(){{document.querySelectorAll('tr.grp-l1').forEach(r=>{{const id=r.dataset.id;if(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(c=>c.style.display='');r.querySelector('.tog').innerHTML='▼';}}}}); }}
+function collapseAll(){{document.querySelectorAll('tr.grp-l2').forEach(r=>r.style.display='none');document.querySelectorAll('.tog').forEach(t=>t.innerHTML='▶');}}
+function limpar(){{document.getElementById('busca').value='';['u','c'].forEach(k=>limAC(k));_somenteDif=false;const b=document.getElementById('btn-dif');b.style.filter='';b.style.boxShadow='';_somenteConciliaveis=false;const bc=document.getElementById('btn-conc');bc.style.filter='';bc.style.boxShadow='';aplicar();}}
+function renderKPIs(){{
+  const totSIS=fil.reduce((a,r)=>a+(r.SIS||0),0),totSIG=fil.reduce((a,r)=>a+(r.SIG||0),0),totDIF=fil.reduce((a,r)=>a+(r.DIF||0),0);
+  const subBase=_somenteConciliaveis?'Adm. Direta + Fundos &middot; contas concili&aacute;veis com SISGEPAT (1232108/09/11/90/91)':'Adm. Direta + Fundos &middot; todas as contas do grupo 1232 (SISGEPAT e demais)';
+  const subDif=_somenteConciliaveis?'Diferen&ccedil;a nas 5 contas concili&aacute;veis &mdash; o que deve estar zerado':'Total exibido &mdash; inclui contas sem correspond&ecirc;ncia direta no SISGEPAT';
+  document.getElementById('kv-sis').textContent=brl(totSIS);
+  document.getElementById('kv-sig').textContent=brl(totSIG);
+  document.getElementById('kv-dif').innerHTML=vcls(totDIF);
+  document.getElementById('ks-sis').innerHTML=subBase;
+  document.getElementById('ks-sig').innerHTML=subBase;
+  document.getElementById('ks-dif').innerHTML=subDif;
+  document.getElementById('kpi-dif').classList.toggle('ka',Math.abs(totDIF)>=0.01);
+}}
 function render(){{
+  renderKPIs();
   const tb=document.getElementById('tbody'),tf=document.getElementById('tfoot');
   const totSIS=fil.reduce((a,r)=>a+(r.SIS||0),0),totSIG=fil.reduce((a,r)=>a+(r.SIG||0),0),totDIF=fil.reduce((a,r)=>a+(r.DIF||0),0);
   document.getElementById('cnt').textContent=fil.length.toLocaleString('pt-BR')+' linha'+(fil.length!==1?'s':'');
   if(!fil.length){{tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro encontrado.</td></tr>';tf.innerHTML='';return;}}
   const tree={{}};
   fil.forEach(r=>{{
-    const g=r.GESTAO,u=r.UG,co=r.CONTA;
-    if(!tree[g])tree[g]={{sis:0,sig:0,dif:0,lbl:r.GESTAO_LABEL,ch:{{}}}};
-    if(!tree[g].ch[u])tree[g].ch[u]={{sis:0,sig:0,dif:0,lbl:r.UG_LABEL,ch:{{}}}};
-    if(!tree[g].ch[u].ch[co])tree[g].ch[u].ch[co]={{sis:0,sig:0,dif:0,lbl:r.CONTA_LABEL}};
-    tree[g].ch[u].ch[co].sis+=r.SIS||0;tree[g].ch[u].ch[co].sig+=r.SIG||0;tree[g].ch[u].ch[co].dif+=r.DIF||0;
-    tree[g].ch[u].sis+=r.SIS||0;tree[g].ch[u].sig+=r.SIG||0;tree[g].ch[u].dif+=r.DIF||0;
-    tree[g].sis+=r.SIS||0;tree[g].sig+=r.SIG||0;tree[g].dif+=r.DIF||0;
+    const u=r.UG,co=r.CONTA;
+    if(!tree[u])tree[u]={{sis:0,sig:0,dif:0,lbl:r.UG_LABEL,ch:{{}}}};
+    if(!tree[u].ch[co])tree[u].ch[co]={{sis:0,sig:0,dif:0,lbl:r.CONTA_LABEL}};
+    tree[u].ch[co].sis+=r.SIS||0;tree[u].ch[co].sig+=r.SIG||0;tree[u].ch[co].dif+=r.DIF||0;
+    tree[u].sis+=r.SIS||0;tree[u].sig+=r.SIG||0;tree[u].dif+=r.DIF||0;
   }});
   let html='',idx=0;
   const srt=o=>Object.keys(o).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  srt(tree).forEach(g=>{{const gId='r'+(idx++),gN=tree[g];html+='<tr class="grp-l1" data-id="'+gId+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+gN.lbl+'</td><td class="right">'+brl(gN.sis)+'</td><td class="right">'+brl(gN.sig)+'</td><td class="right">'+vcls(gN.dif)+'</td></tr>';srt(gN.ch).forEach(u=>{{const uId='r'+(idx++),uN=gN.ch[u];html+='<tr class="grp-l2" data-id="'+uId+'" data-p="'+gId+'" style="display:none" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';srt(uN.ch).forEach(co=>{{const coN=uN.ch[co];html+='<tr class="grp-l3" data-p="'+uId+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';}});}});}});
+  srt(tree).forEach(u=>{{const uId='r'+(idx++),uN=tree[u];html+='<tr class="grp-l1" data-id="'+uId+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';srt(uN.ch).forEach(co=>{{const coN=uN.ch[co];html+='<tr class="grp-l2" data-p="'+uId+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';}})}});
   tb.innerHTML=html;
   tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
 }}
 function tog(id){{const row=document.querySelector('tr[data-id="'+id+'"]');const togEl=row.querySelector('.tog');const exp=togEl.innerHTML==='&#9660;'||togEl.textContent==='▼';if(exp){{collapseDesc(id);togEl.innerHTML='&#9654;';}}else{{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{r.style.display='';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});togEl.innerHTML='&#9660;';}}}}
 function collapseDesc(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{const cid=r.getAttribute('data-id');if(cid)collapseDesc(cid);r.style.display='none';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});}}
-function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['Gestao','UG','Unidade Gestora','Conta','Descricao Conta','SISGEPAT','SIGGO','Diferenca'];const keys=['GESTAO','UG','NOME','CONTA','DESC','SIS','SIG','DIF'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
+function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['UG','Unidade Gestora','Conta','Descricao Conta','SISGEPAT','SIGGO','Diferenca'];const keys=['UG','NOME','CONTA','DESC','SIS','SIG','DIF'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
 (async()=>{{
   const [meta,quadro]=await Promise.all([decomp(B64_META),decomp(B64_QUADRO)]);
-  quadro.forEach(r=>{{r.GESTAO_LABEL=r.GESTAO+(r.NOGEST?' - '+r.NOGEST:'');r.UG_LABEL=r.UG+(r.NOME?' - '+r.NOME:'');r.CONTA_LABEL=r.CONTA+(r.DESC?' - '+r.DESC:'');}});
+  quadro.forEach(r=>{{r.UG_LABEL=r.UG+(r.NOME?' - '+r.NOME:'');r.CONTA_LABEL=r.CONTA+(r.DESC?' - '+r.DESC:'');}});
   ALL=quadro;
   document.getElementById('krow').innerHTML=
-    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv">'+brl(meta.tot_sis)+'</div></div>'+
-    '<div class="kpi"><div class="kl">SIGGO</div><div class="kv">'+brl(meta.tot_sig)+'</div></div>'+
-    '<div class="kpi'+(Math.abs(meta.div_reais)<0.01?'':' ka')+'"><div class="kl">Diverg&#234;ncias</div><div class="kv'+(Math.abs(meta.div_reais)<0.01?'':' neg')+'">'+brl(meta.div_reais)+'</div></div>';
+    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
+    '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
+    '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
   document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
   acState={{
-    'g':{{sel:'',list:buildList(r=>r.GESTAO,r=>r.GESTAO_LABEL),inp:'fg-input',clr:'fg-clear',dd:'fg-dd'}},
     'u':{{sel:'',list:buildList(r=>r.UG,r=>r.UG_LABEL),inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}},
     'c':{{sel:'',list:buildList(r=>r.CONTA,r=>r.CONTA_LABEL),inp:'fc-input',clr:'fc-clear',dd:'fc-dd'}}
   }};
@@ -356,7 +371,7 @@ function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');c
 window.tog=tog;window.collapseDesc=collapseDesc;
 window.onAC=onAC;window.offAC=offAC;window.selAC=selAC;window.limAC=limAC;
 window.aplicar=aplicar;window.limpar=limpar;window.exportar=exportar;
-window.toggleDif=toggleDif;window.expandAll=expandAll;window.collapseAll=collapseAll;window.selACI=selACI;
+window.toggleDif=toggleDif;window.toggleConc=toggleConc;window.expandAll=expandAll;window.collapseAll=collapseAll;window.selACI=selACI;
 </script>
 </body></html>"""
     return html
