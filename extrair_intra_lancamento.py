@@ -102,6 +102,7 @@ LEFT JOIN {schema}GESTAO          gc ON gc.COGESTAO = v.COGESTAOCONTAB
 LEFT JOIN {schema}GESTAO          ge ON ge.COGESTAO = v.COGESTAO
 WHERE v.INMES <= :mes
   AND SUBSTR(TO_CHAR(v.COCONTACONTABIL),1,1) IN ('1','2','3','4')
+  AND SUBSTR(TO_CHAR(v.COCONTACONTABIL),5,1)='2'
 GROUP BY
   v.INMES, v.COGESTAO, v.COUG, ue.NOUG, ge.NOGESTAO,
   v.COGESTAOCONTAB, v.COUGCONTAB, uc.NOUG, gc.NOGESTAO,
@@ -185,7 +186,7 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .thead-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
 .ttitle{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
 .tw{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:1001px;table-layout:fixed}
+table{width:100%;border-collapse:collapse;min-width:1081px;table-layout:fixed}
 .sw{position:relative}
 .sw input{border:2px solid var(--teal);border-radius:6px;padding:7px 12px 7px 32px;font-size:12.5px;min-width:280px;background:#fff;box-shadow:0 0 0 2px rgba(0,144,168,.08)}
 .sw input:focus{outline:none;border-color:var(--navy);box-shadow:0 0 0 3px rgba(0,144,168,.18)}
@@ -283,14 +284,12 @@ tfoot tr td.left{text-align:left}
 
 <div class="krow">
   <div class="kpi" id="kpi-a">
-    <div class="kl">Divergências — Equação A</div>
+    <div class="kl">Divergências — Classes 1+3 = Classes 2+4 (somente subtítulo 2)</div>
     <div class="kv" id="kv-a">—</div>
-    <div class="ks">Classes 1+3 = Classes 2+4 (somente subtítulo 2)</div>
   </div>
   <div class="kpi" id="kpi-b">
-    <div class="kl">Divergências — Equação B</div>
+    <div class="kl">Divergências — Classe 3 = Classe 4 (somente subtítulo 2)</div>
     <div class="kv" id="kv-b">—</div>
-    <div class="ks">Classe 3 = Classe 4 (somente subtítulo 2)</div>
   </div>
 </div>
 
@@ -315,8 +314,8 @@ tfoot tr td.left{text-align:left}
           <th class="left nosort" style="width:36px"></th>
           <th class="left" style="width:220px" onclick="sortBy('UG')">Gestão · UG<span id="s_UG" class="si">⇅</span></th>
           <th class="left nosort" style="width:115px">Conta Contábil</th>
-          <th style="width:110px" onclick="sortBy('DIVA')">Div. Eq. A<span id="s_DIVA" class="si">⇅</span></th>
-          <th style="width:110px" onclick="sortBy('DIVB')">Div. Eq. B<span id="s_DIVB" class="si">⇅</span></th>
+          <th style="width:150px" title="Divergências 1+3 = 2+4 (subtítulo 2)" onclick="sortBy('DIVA')">Diverg. 1+3 = 2+4<span id="s_DIVA" class="si">⇅</span></th>
+          <th style="width:150px" title="Divergências 3 = 4 (subtítulo 2)" onclick="sortBy('DIVB')">Diverg. 3 = 4<span id="s_DIVB" class="si">⇅</span></th>
           <th style="width:90px" onclick="sortBy('DATA')">Data Lanç.<span id="s_DATA" class="si">⇅</span></th>
           <th class="left nosort" style="width:120px">Gestão-UG Emitente</th>
           <th class="left" style="width:130px" onclick="sortBy('NUDOC')">Nº Documento<span id="s_NUDOC" class="si">⇅</span></th>
@@ -355,6 +354,8 @@ decomp('{dados}').then(txt=>{window.ALL=JSON.parse(txt);init();});
 function n(v){return v==null?0:+v||0;}
 function brl(v){
   if(v==null||isNaN(v))return'—';
+  v=Math.round(v*100)/100;
+  if(v===0)return'R$ 0,00';
   const s=v<0?'-':'',a=Math.abs(v);
   return s+'R$ '+a.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
 }
