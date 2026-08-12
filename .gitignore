@@ -16,3 +16,17 @@ backup_*/
 Controle_*.txt
 Controle_*.png
 Regras_*.png
+
+# Imagens de referência interna
+*.png
+
+# Dados extraídos
+*.csv
+
+# Prévias e backups gerados automaticamente
+*_backup_*.html
+equacao_balanco_email_preview.html
+
+# Scripts utilitários/de teste (não são painéis publicados)
+autorizar_gmail.py
+teste_email.py
