@@ -50,7 +50,7 @@ Executar-Script "extrair_empresas_independentes.py"
 Executar-Script "extrair_saldo_invertido.py"
 Executar-Script "extrair_rpp_por_ne.py"
 Executar-Script "extrair_intra_lancamento.py"
-Executar-Script "extrair_conciliacao_sisgepat.py"
+Executar-Script "extrair_conciliacao_bens_imoveis_sisgepat.py"
 
 $env:NO_GIT_PUSH = ""
 
@@ -74,7 +74,7 @@ Write-Output $rodape; Add-Content -Path $log -Value $rodape
 # Verificação de equações intragovernamentais e envio de alerta por e-mail
 $alertaMsg = "[$((Get-Date))] Verificando equações intragovernamentais (alerta por e-mail)..."
 Write-Output $alertaMsg; Add-Content -Path $log -Value $alertaMsg
-$alertaOut = & $python (Join-Path $pasta "extrair_equacao_balanco.py") 2>&1
+$alertaOut = & $python (Join-Path $pasta "alerta_lancamentos_intra.py") 2>&1
 $alertaOut | ForEach-Object { Add-Content -Path $log -Value $_ }
 $alertaFim = "[$((Get-Date))] Verificação de equações concluída."
 Write-Output $alertaFim; Add-Content -Path $log -Value $alertaFim

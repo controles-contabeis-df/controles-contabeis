@@ -10,9 +10,9 @@ Quando há divergência, detalha os documentos e UGs emitentes responsáveis.
 Envia e-mail de alerta quando |divergência global| > R$ 0,01.
 
 Uso:
-    python extrair_equacao_balanco.py
-    python extrair_equacao_balanco.py --mes 7 --ano 2026
-    python extrair_equacao_balanco.py --dry-run
+    python alerta_lancamentos_intra.py
+    python alerta_lancamentos_intra.py --mes 7 --ano 2026
+    python alerta_lancamentos_intra.py --dry-run
 """
 import argparse, base64, os
 from datetime import date, datetime
@@ -299,7 +299,7 @@ def enviar_ou_preview(html, mes, ano, dry_run):
     assunto = (f"ALERTA CONTÁBIL — Lançamentos Intragovernamentais — "
                f"{MESES[mes]}/{ano} — {datetime.now().strftime('%d/%m/%Y')}")
     if dry_run:
-        preview = PASTA / "equacao_balanco_email_preview.html"
+        preview = PASTA / "lancamentos_intra_email_preview.html"
         preview.write_text(html, encoding="utf-8")
         print(f"  [DRY-RUN] E-mail salvo para revisão: {preview}")
         print(f"  [DRY-RUN] Assunto seria: {assunto}")
