@@ -3,7 +3,7 @@ LANÇAMENTOS INTRAGOVERNAMENTAIS — documentos que abrem as equações A e B (s
 Gera HTML autocontido para análise interativa e publica no GitHub Pages.
 
 Equação A: Classes 1+3 (devedoras) = Classes 2+4 (credoras) — subtítulo 2
-Equação B: Classe 3 (VPD) = Classe 4 (VPA) — subtítulo 2
+Equação B: Classes 3 + 119X2XXXX/12192XXXX (VPD paga antecip.) = Classe 4 (VPA) — subtítulo 2
 
 Para cada documento com divergência em A ou B, exibe todas as contas contábeis
 (classes 1–4) sensibilizadas, indicando quais linhas contribuem para cada equação.
@@ -14,7 +14,8 @@ Uso:
     python extrair_intra_lancamento.py --no-push
 """
 
-import argparse, base64, gzip, json, os, subprocess
+import argparse, base64, gzip, json, os, subprocess, sys
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from datetime import date, datetime
 from pathlib import Path
 
@@ -64,7 +65,9 @@ WITH docs_div AS (
   OR
     ABS(ROUND(SUM(
       CASE WHEN SUBSTR(TO_CHAR(v.COCONTACONTABIL),5,1)='2'
-                AND SUBSTR(TO_CHAR(v.COCONTACONTABIL),1,1) IN ('3','4')
+                AND (SUBSTR(TO_CHAR(v.COCONTACONTABIL),1,1) IN ('3','4')
+                     OR SUBSTR(TO_CHAR(v.COCONTACONTABIL),1,3) = '119'
+                 OR SUBSTR(TO_CHAR(v.COCONTACONTABIL),1,4) = '1219')
            THEN CASE WHEN v.INDEBITOCREDITO='D' THEN  v.VALANCAMENTO
                      WHEN v.INDEBITOCREDITO='C' THEN -v.VALANCAMENTO ELSE 0 END
            ELSE 0 END), 2)) > 0.005
@@ -276,7 +279,7 @@ tfoot tr td.left{text-align:left}
   <!-- Grupo de Contas -->
   <div class="bgrp">
     <button class="btn btn-eqA" id="btn-eqA" onclick="filtrarEq('eqA')">Divergências 1+3 = 2+4</button>
-    <button class="btn btn-eqB" id="btn-eqB" onclick="filtrarEq('eqB')">Divergências 3 = 4</button>
+    <button class="btn btn-eqB" id="btn-eqB" onclick="filtrarEq('eqB')">Divergências 3+119/1219 = 4</button>
     <button class="btn btn-g" onclick="limpar()">↺ Limpar filtros</button>
     <button class="btn btn-p" onclick="exportarCSV()">↓ Exportar CSV</button>
   </div>
@@ -288,7 +291,7 @@ tfoot tr td.left{text-align:left}
     <div class="kv" id="kv-a">—</div>
   </div>
   <div class="kpi" id="kpi-b">
-    <div class="kl">Divergências — Classe 3 = Classe 4 (somente subtítulo 2)</div>
+    <div class="kl">Divergências — Classes 3 + VPD Pagas Antecip. Intra = Classe 4 (somente subtítulo 2)</div>
     <div class="kv" id="kv-b">—</div>
   </div>
 </div>
@@ -315,7 +318,7 @@ tfoot tr td.left{text-align:left}
           <th class="left" style="width:220px" onclick="sortBy('UG')">Gestão · UG<span id="s_UG" class="si">⇅</span></th>
           <th class="left nosort" style="width:115px">Conta Contábil</th>
           <th style="width:150px" title="Divergências 1+3 = 2+4 (subtítulo 2)" onclick="sortBy('DIVA')">Diverg. 1+3 = 2+4<span id="s_DIVA" class="si">⇅</span></th>
-          <th style="width:150px" title="Divergências 3 = 4 (subtítulo 2)" onclick="sortBy('DIVB')">Diverg. 3 = 4<span id="s_DIVB" class="si">⇅</span></th>
+          <th style="width:150px" title="Divergências 3 + VPD Pagas Antecip. Intra = Classe 4 (subtítulo 2)" onclick="sortBy('DIVB')">Diverg. 3+119X2/12192 = 4<span id="s_DIVB" class="si">⇅</span></th>
           <th style="width:90px" onclick="sortBy('DATA')">Data Lanç.<span id="s_DATA" class="si">⇅</span></th>
           <th class="left nosort" style="width:120px">Gestão-UG Emitente</th>
           <th class="left" style="width:130px" onclick="sortBy('NUDOC')">Nº Documento<span id="s_NUDOC" class="si">⇅</span></th>
@@ -369,8 +372,13 @@ function emitLabel(g,u){return fmtG(g)+'-'+String(u);}
 
 /* Equação A: subtítulo 2, classes 1–4 */
 function divA(r){return r.SUBTITULO==='2'?n(r.VLNET):0;}
-/* Equação B: subtítulo 2, classes 3–4 */
-function divB(r){return r.SUBTITULO==='2'&&(r.CLASSE==='3'||r.CLASSE==='4')?n(r.VLNET):0;}
+/* Equação B: subtítulo 2, classes 3 + 119X2XXXX/12192XXXX (VPD paga antecip.) e 4 */
+function divB(r){
+  if(r.SUBTITULO!=='2')return 0;
+  if(r.CLASSE==='3'||r.CLASSE==='4')return n(r.VLNET);
+  if(r.CLASSE==='1'&&(String(r.COCONTACONTABIL||'').substring(0,3)==='119'||String(r.COCONTACONTABIL||'').substring(0,4)==='1219'))return n(r.VLNET);
+  return 0;
+}
 
 /* ── Autocomplete genérico (gestão contab, UG contab, conta) ── */
 const AC={g:{sel:'',label:''},u:{sel:'',label:''},c:{sel:'',label:''}};
