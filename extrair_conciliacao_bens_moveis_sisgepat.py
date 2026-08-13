@@ -80,6 +80,13 @@ SQL = """{de_para},
 cougs_direta AS (
     SELECT TO_NUMBER(COUG) COUG_NUM FROM de_para
 ),
+subitem_desc AS (
+    -- Descritivos de todos os subitens, independente de localização
+    SELECT LPAD(TP_CODIGO, 2, '0') AS SUBITEM, MIN(TP_DESCRICAO) AS DESC_SUBITEM
+    FROM SIGGO.PAT_BENSMOVEIS
+    WHERE TP_DESCRICAO IS NOT NULL
+    GROUP BY TP_CODIGO
+),
 sisgepat AS (
     -- Guarda física (LO_CODIGO) → COUG via de_para; MO_VALORATUAL em centavos ÷ 100
     SELECT
@@ -120,7 +127,7 @@ SELECT
     NVL(si.COUG,         sg.COUG)    AS COUG,
     TRIM(ug.NOUG)                    AS NOUG,
     NVL(si.SUBITEM,      sg.SUBITEM) AS SUBITEM,
-    NVL(si.DESC_SUBITEM, '')         AS DESC_SUBITEM,
+    NVL(si.DESC_SUBITEM, NVL(sd.DESC_SUBITEM, '')) AS DESC_SUBITEM,
     NVL(sg.BENS_MOVEIS,       0)     AS BENS_MOVEIS,
     NVL(sg.BENS_MOVEIS_ALMOX, 0)     AS BENS_MOVEIS_ALMOX,
     NVL(sg.BENS_MOVEIS_IMPORT,0)     AS BENS_MOVEIS_IMPORT,
@@ -137,6 +144,8 @@ FULL OUTER JOIN siggo sg
     ON si.COUG = sg.COUG AND si.SUBITEM = sg.SUBITEM
 LEFT JOIN MIL2026.VUNIDADEGESTORA ug
     ON ug.COUG = TO_NUMBER(NVL(si.COUG, sg.COUG))
+LEFT JOIN subitem_desc sd
+    ON sd.SUBITEM = NVL(si.SUBITEM, sg.SUBITEM)
 ORDER BY NVL(si.COUG, sg.COUG), NVL(si.SUBITEM, sg.SUBITEM)
 """
 
