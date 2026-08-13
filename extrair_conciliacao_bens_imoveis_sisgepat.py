@@ -3,9 +3,9 @@ Conciliação SIGGO × SISGEPAT — painel HTML
 Gera painel web autocontido com os resultados da conciliação patrimonial.
 
 Uso:
-    python extrair_conciliacao_sisgepat.py
-    python extrair_conciliacao_sisgepat.py --mes 7 --ano 2026
-    python extrair_conciliacao_sisgepat.py --no-push
+    python extrair_conciliacao_bens_imoveis_sisgepat.py
+    python extrair_conciliacao_bens_imoveis_sisgepat.py --mes 7 --ano 2026
+    python extrair_conciliacao_bens_imoveis_sisgepat.py --no-push
 """
 
 import argparse, base64, gzip, importlib.util, json, subprocess, sys
@@ -26,7 +26,7 @@ GITHUB_TOKEN  = os.environ["GITHUB_TOKEN"]
 GITHUB_USER   = os.environ["GITHUB_USER"]
 GITHUB_REPO   = os.environ["GITHUB_REPO"]
 GITHUB_BRANCH = os.environ["GITHUB_BRANCH"]
-ARQUIVO_HTML  = "conciliacao_sisgepat.html"
+ARQUIVO_HTML  = "conciliacao_bens_imoveis_sisgepat.html"
 
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
@@ -388,7 +388,7 @@ def publicar(html, no_push=False):
     url = f"https://{GITHUB_TOKEN}@github.com/{GITHUB_USER}/{GITHUB_REPO}.git"
     subprocess.run(["git", "-C", repo_dir, "add", ARQUIVO_HTML], check=True)
     subprocess.run(["git", "-C", repo_dir, "commit", "-m",
-                    f"auto: atualiza conciliacao_sisgepat.html"], check=True)
+                    f"auto: atualiza conciliacao_bens_imoveis_sisgepat.html"], check=True)
     subprocess.run(["git", "-C", repo_dir, "push", url,
                     f"HEAD:{GITHUB_BRANCH}"], check=True)
 

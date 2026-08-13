@@ -9,8 +9,12 @@ logs/
 
 # Backups e arquivos temporários
 backup_*/
+_backups/
 *_backup_*.py
 *.bak
+
+# Ferramentas e referências locais
+tools/
 
 # Arquivos de referência/documentação local (não fazem parte do site)
 Controle_*.txt
@@ -25,7 +29,7 @@ Regras_*.png
 
 # Prévias e backups gerados automaticamente
 *_backup_*.html
-equacao_balanco_email_preview.html
+lancamentos_intra_email_preview.html
 
 # Scripts utilitários/de teste (não são painéis publicados)
 autorizar_gmail.py
