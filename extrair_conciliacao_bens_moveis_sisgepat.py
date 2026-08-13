@@ -183,6 +183,9 @@ def extrair(mes, ano):
     df["NOUG"]         = df["NOUG"].fillna("(sem nome)")
     df["DESC_SUBITEM"] = df["DESC_SUBITEM"].fillna("")
 
+    # Remove linhas em que SIGGO e SISGEPAT são ambos zero (saldo nulo sem utilidade analítica)
+    df = df[(df["TOTAL_SIGGO"].abs() > 0.005) | (df["SALDO_SISGEPAT"].abs() > 0.005)]
+
     print(f"  {len(df)} linhas retornadas.")
     total_siggo  = df["TOTAL_SIGGO"].sum()
     total_sispat = df["SALDO_SISGEPAT"].sum()
