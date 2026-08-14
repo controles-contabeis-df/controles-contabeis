@@ -77,5 +77,11 @@ $alertaMsg = "[$((Get-Date))] Verificando equações intragovernamentais (alerta
 Write-Output $alertaMsg; Add-Content -Path $log -Value $alertaMsg
 $alertaOut = & $python (Join-Path $pasta "alerta_lancamentos_intra.py") 2>&1
 $alertaOut | ForEach-Object { Add-Content -Path $log -Value $_ }
+
+$alerta2Msg = "[$((Get-Date))] Verificando transferências intragovernamentais 351120 x 451120..."
+Write-Output $alerta2Msg; Add-Content -Path $log -Value $alerta2Msg
+$alerta2Out = & $python (Join-Path $pasta "alerta_transferencias_intra.py") 2>&1
+$alerta2Out | ForEach-Object { Add-Content -Path $log -Value $_ }
+
 $alertaFim = "[$((Get-Date))] Verificação de equações concluída."
 Write-Output $alertaFim; Add-Content -Path $log -Value $alertaFim
