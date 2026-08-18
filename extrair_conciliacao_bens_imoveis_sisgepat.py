@@ -155,10 +155,11 @@ def gerar_html(quadro, eventos, transf, achados, siggo_tomb, mes, ano):  # noqa:
     def _q(df, cols):
         return df[cols].where(pd.notnull(df[cols]), None).to_dict(orient="records")
 
-    quadro_rows = _q(quadro.rename(columns={
+    quadro_exp = quadro.rename(columns={
         "NOME_UG": "NOME", "DESCRICAO_CONTA": "DESC",
-        "SISGEPAT_VALOR": "SIS", "SIGGO_VALOR": "SIG", "DIFERENCA": "DIF"}),
-        ["UG", "NOME", "CONTA", "DESC", "SIS", "SIG", "DIF"])
+        "SISGEPAT_VALOR": "SIS", "SIGGO_VALOR": "SIG"}).copy()
+    quadro_exp["DIF"] = quadro_exp["SIG"] - quadro_exp["SIS"]   # SIGGO − SISGEPAT
+    quadro_rows = _q(quadro_exp, ["UG", "NOME", "CONTA", "DESC", "SIS", "SIG", "DIF"])
 
     b64_meta   = _embed(meta)
     b64_quadro = _embed(quadro_rows)
@@ -286,8 +287,8 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
   <div class="tw"><table>
     <thead><tr>
       <th>Unidade Gestora / Conta Cont&#225;bil</th>
-      <th class="right">SISGEPAT</th>
       <th class="right">SIGGO</th>
+      <th class="right">SISGEPAT</th>
       <th class="right">Diferen&#231;a</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
@@ -322,11 +323,11 @@ function renderKPIs(){{
   const totSIS=fil.reduce((a,r)=>a+(r.SIS||0),0),totSIG=fil.reduce((a,r)=>a+(r.SIG||0),0),totDIF=fil.reduce((a,r)=>a+(r.DIF||0),0);
   const subBase=_somenteConciliaveis?'Adm. Direta + Fundos &middot; contas concili&aacute;veis com SISGEPAT (1232108/09/11/90/91)':'Adm. Direta + Fundos &middot; todas as contas do grupo 1232 (SISGEPAT e demais)';
   const subDif=_somenteConciliaveis?'Diferen&ccedil;a nas 5 contas concili&aacute;veis &mdash; o que deve estar zerado':'Total exibido &mdash; inclui contas sem correspond&ecirc;ncia direta no SISGEPAT';
-  document.getElementById('kv-sis').textContent=brl(totSIS);
   document.getElementById('kv-sig').textContent=brl(totSIG);
+  document.getElementById('kv-sis').textContent=brl(totSIS);
   document.getElementById('kv-dif').innerHTML=vcls(totDIF);
-  document.getElementById('ks-sis').innerHTML=subBase;
   document.getElementById('ks-sig').innerHTML=subBase;
+  document.getElementById('ks-sis').innerHTML=subBase;
   document.getElementById('ks-dif').innerHTML=subDif;
   document.getElementById('kpi-dif').classList.toggle('ka',Math.abs(totDIF)>=0.01);
 }}
@@ -346,20 +347,20 @@ function render(){{
   }});
   let html='',idx=0;
   const srt=o=>Object.keys(o).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  srt(tree).forEach(u=>{{const uId='r'+(idx++),uN=tree[u];html+='<tr class="grp-l1" data-id="'+uId+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';srt(uN.ch).forEach(co=>{{const coN=uN.ch[co];html+='<tr class="grp-l2" data-p="'+uId+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';}})}});
+  srt(tree).forEach(u=>{{const uId='r'+(idx++),uN=tree[u];html+='<tr class="grp-l1" data-id="'+uId+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';srt(uN.ch).forEach(co=>{{const coN=uN.ch[co];html+='<tr class="grp-l2" data-p="'+uId+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';}})}});
   tb.innerHTML=html;
-  tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
+  tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
 }}
 function tog(id){{const row=document.querySelector('tr[data-id="'+id+'"]');const togEl=row.querySelector('.tog');const exp=togEl.innerHTML==='&#9660;'||togEl.textContent==='▼';if(exp){{collapseDesc(id);togEl.innerHTML='&#9654;';}}else{{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{r.style.display='';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});togEl.innerHTML='&#9660;';}}}}
 function collapseDesc(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{const cid=r.getAttribute('data-id');if(cid)collapseDesc(cid);r.style.display='none';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});}}
-function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['UG','Unidade Gestora','Conta','Descricao Conta','SISGEPAT','SIGGO','Diferenca'];const keys=['UG','NOME','CONTA','DESC','SIS','SIG','DIF'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
+function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['UG','Unidade Gestora','Conta','Descricao Conta','SIGGO','SISGEPAT','Diferenca'];const keys=['UG','NOME','CONTA','DESC','SIG','SIS','DIF'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
 (async()=>{{
   const [meta,quadro]=await Promise.all([decomp(B64_META),decomp(B64_QUADRO)]);
   quadro.forEach(r=>{{r.UG_LABEL=r.UG+(r.NOME?' - '+r.NOME:'');r.CONTA_LABEL=r.CONTA+(r.DESC?' - '+r.DESC:'');}});
   ALL=quadro;
   document.getElementById('krow').innerHTML=
-    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
+    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
   document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
   acState={{
