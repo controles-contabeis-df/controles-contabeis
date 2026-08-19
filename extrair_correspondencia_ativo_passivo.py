@@ -9,6 +9,8 @@ Passivo em outra; o painel agrupa por documento + UG Emitente para rastreamento.
 Equações monitoradas (extensíveis em EQUACOES):
   EQ1: 21142XXXX = 113620101 + 113620103
   EQ2: 218820101 = 113620102 + 113620104
+  EQ3: 218820104 = 112120101
+  EQ4: 218820107 = 112120104
 
 Natureza das contas:
   Classe 1 (Ativo)  — devedora: VLNET = D - C
@@ -51,6 +53,12 @@ EQUACOES = [
     {"id": "EQ2", "desc": "218820101 = 113620102 + 113620104",
      "passivo_exact": [218820101], "passivo_prefix": None,
      "ativo": [113620102, 113620104]},
+    {"id": "EQ3", "desc": "218820104 = 112120101",
+     "passivo_exact": [218820104], "passivo_prefix": None,
+     "ativo": [112120101]},
+    {"id": "EQ4", "desc": "218820107 = 112120104",
+     "passivo_exact": [218820107], "passivo_prefix": None,
+     "ativo": [112120104]},
 ]
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
@@ -164,6 +172,10 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .btn-eq1.active,.btn-eq1:hover{background:var(--red);color:#fff;border-color:var(--red)}
 .btn-eq2{background:#fef9e2;color:var(--amber);border:1.5px solid #f0dc8a}
 .btn-eq2.active,.btn-eq2:hover{background:#c9950a;color:#fff;border-color:#c9950a}
+.btn-eq3{background:#e8f5e9;color:#2e7d32;border:1.5px solid #a5d6a7}
+.btn-eq3.active,.btn-eq3:hover{background:#2e7d32;color:#fff;border-color:#2e7d32}
+.btn-eq4{background:#ede7f6;color:#5e35b1;border:1.5px solid #ce93d8}
+.btn-eq4.active,.btn-eq4:hover{background:#5e35b1;color:#fff;border-color:#5e35b1}
 .emit-wrap{position:relative;min-width:180px}
 .emit-in{border:2px solid var(--teal);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;box-shadow:0 0 0 2px rgba(0,144,168,.08)}
 .emit-in:focus{outline:none;border-color:var(--navy)}
@@ -174,6 +186,8 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),var(--teal-light))}
 .kpi.ka::before{background:linear-gradient(90deg,var(--red),#e74c3c)}
 .kpi.km::before{background:linear-gradient(90deg,var(--amber),#e6b800)}
+.kpi.kg::before{background:linear-gradient(90deg,#2e7d32,#43a047)}
+.kpi.kv4::before{background:linear-gradient(90deg,#5e35b1,#7e57c2)}
 .kl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .kv{font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1}
 .ks{font-size:11px;color:var(--muted);margin-top:5px}
@@ -255,6 +269,8 @@ tfoot tr td.left{text-align:left}
   <div class="bgrp">
     <button class="btn btn-eq1" id="btn-eq1" onclick="filtrarEq('eq1')">&#9888; Diverg. EQ1</button>
     <button class="btn btn-eq2" id="btn-eq2" onclick="filtrarEq('eq2')">&#9888; Diverg. EQ2</button>
+    <button class="btn btn-eq3" id="btn-eq3" onclick="filtrarEq('eq3')">&#9888; Diverg. EQ3</button>
+    <button class="btn btn-eq4" id="btn-eq4" onclick="filtrarEq('eq4')">&#9888; Diverg. EQ4</button>
     <button class="btn btn-g" onclick="limpar()">&#8635; Limpar filtros</button>
     <button class="btn btn-p" onclick="exportarCSV()">&#8615; Exportar CSV</button>
   </div>
@@ -280,6 +296,16 @@ tfoot tr td.left{text-align:left}
     <div class="kl">Diverg&#234;ncia EQ2</div>
     <div class="kv" id="kv-eq2">&#8212;</div>
     <div class="ks">218820101 = 113620102 + 113620104</div>
+  </div>
+  <div class="kpi" id="kpi-eq3">
+    <div class="kl">Diverg&#234;ncia EQ3</div>
+    <div class="kv" id="kv-eq3">&#8212;</div>
+    <div class="ks">218820104 = 112120101</div>
+  </div>
+  <div class="kpi" id="kpi-eq4">
+    <div class="kl">Diverg&#234;ncia EQ4</div>
+    <div class="kv" id="kv-eq4">&#8212;</div>
+    <div class="ks">218820107 = 112120104</div>
   </div>
 </div>
 
@@ -307,13 +333,15 @@ tfoot tr td.left{text-align:left}
         <th style="width:120px" onclick="sortBy('PASSIVO')">Passivo <span id="s_PASSIVO" class="si">&#8645;</span></th>
         <th style="width:110px" onclick="sortBy('DIV1')">Diverg. EQ1 <span id="s_DIV1" class="si">&#8645;</span></th>
         <th style="width:110px" onclick="sortBy('DIV2')">Diverg. EQ2 <span id="s_DIV2" class="si">&#8645;</span></th>
+        <th style="width:110px" onclick="sortBy('DIV3')">Diverg. EQ3 <span id="s_DIV3" class="si">&#8645;</span></th>
+        <th style="width:110px" onclick="sortBy('DIV4')">Diverg. EQ4 <span id="s_DIV4" class="si">&#8645;</span></th>
         <th style="width:88px" onclick="sortBy('DATA')">Data Lan&#231;. <span id="s_DATA" class="si">&#8645;</span></th>
         <th class="left nosort" style="width:120px">Gest&#227;o-UG Emitente</th>
         <th class="left" style="width:130px" onclick="sortBy('NUDOC')">N&#186; Documento <span id="s_NUDOC" class="si">&#8645;</span></th>
         <th class="left nosort" style="width:70px">Evento</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
-      <tfoot><tr id="tfoot-row"><td class="left" colspan="11">&#8212;</td></tr></tfoot>
+      <tfoot><tr id="tfoot-row"><td class="left" colspan="13">&#8212;</td></tr></tfoot>
     </table>
   </div>
   <div id="pgbar-bot" class="pgbar"></div>
@@ -428,11 +456,13 @@ function filtrarEq(mode){
   filterMode=(filterMode===mode)?'all':mode;
   document.getElementById('btn-eq1').classList.toggle('active',filterMode==='eq1');
   document.getElementById('btn-eq2').classList.toggle('active',filterMode==='eq2');
+  document.getElementById('btn-eq3').classList.toggle('active',filterMode==='eq3');
+  document.getElementById('btn-eq4').classList.toggle('active',filterMode==='eq4');
   aplicar();
 }
 
 /* Ordenacao */
-const SORT_COLS=['UG','ATIVO','PASSIVO','DIV1','DIV2','DATA','NUDOC'];
+const SORT_COLS=['UG','ATIVO','PASSIVO','DIV1','DIV2','DIV3','DIV4','DATA','NUDOC'];
 function sortBy(col){
   if(sortCol===col){sortDir*=-1;}else{sortCol=col;sortDir=1;}
   SORT_COLS.forEach(c=>{const el=document.getElementById('s_'+c);if(el)el.textContent=c===sortCol?(sortDir>0?'\u2191':'\u2193'):'\u21c5';});
@@ -445,6 +475,8 @@ function cmpDocs(a,b){
   if(sortCol==='PASSIVO') return sortDir*(n(a.totPassivo)-n(b.totPassivo));
   if(sortCol==='DIV1')    return sortDir*(n(a.divEQ1)-n(b.divEQ1));
   if(sortCol==='DIV2')    return sortDir*(n(a.divEQ2)-n(b.divEQ2));
+  if(sortCol==='DIV3')    return sortDir*(n(a.divEQ3)-n(b.divEQ3));
+  if(sortCol==='DIV4')    return sortDir*(n(a.divEQ4)-n(b.divEQ4));
   if(sortCol==='UG')      return sortDir*(a.emitKey||'').localeCompare(b.emitKey||'','pt-BR');
   return 0;
 }
@@ -485,7 +517,7 @@ function aplicar(){
     const k=ek+'|'+(r.NUDOCUMENTO||'');
     if(!map[k])map[k]={key:k,emitKey:ek,NUDOCUMENTO:r.NUDOCUMENTO,rows:[],
                        minData:null,minDataISO:null,
-                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,byAcct:{}};
+                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,byAcct:{}};
     const d=map[k];
     d.rows.push(r);
     const vl=n(r.VLNET),acct=+r.COCONTACONTABIL;
@@ -501,12 +533,16 @@ function aplicar(){
       const div=Math.round((pas-ati)*100)/100;
       if(eq.id==='EQ1')d.divEQ1=div;
       if(eq.id==='EQ2')d.divEQ2=div;
+      if(eq.id==='EQ3')d.divEQ3=div;
+      if(eq.id==='EQ4')d.divEQ4=div;
     });
   });
   filDocs=Object.values(map).filter(d=>{
     if(emitSel&&d.emitKey!==emitSel)return false;
     if(filterMode==='eq1'&&Math.abs(d.divEQ1)<0.005)return false;
     if(filterMode==='eq2'&&Math.abs(d.divEQ2)<0.005)return false;
+    if(filterMode==='eq3'&&Math.abs(d.divEQ3)<0.005)return false;
+    if(filterMode==='eq4'&&Math.abs(d.divEQ4)<0.005)return false;
     if(busca){
       const docOk=String(d.NUDOCUMENTO||'').toLowerCase().includes(busca);
       const evOk=d.rows.some(r=>r.COEVENTO!=null&&String(r.COEVENTO).toLowerCase().includes(busca));
@@ -523,7 +559,7 @@ function render(){
   let html='';
   filDocs.slice(start,end).forEach(d=>{
     const did='d'+d.key.replace(/[^a-z0-9]/gi,'_');
-    const dA=n(d.divEQ1),dB=n(d.divEQ2),totA=n(d.totAtivo),totP=n(d.totPassivo);
+    const dA=n(d.divEQ1),dB=n(d.divEQ2),dC=n(d.divEQ3),dD=n(d.divEQ4),totA=n(d.totAtivo),totP=n(d.totPassivo);
     html+='<tr class="row-doc" onclick="toggleDoc(\''+did+'\')">'
       +'<td class="left" colspan="3"><span class="tog" id="tog_'+did+'">&#9654;</span>'
       +' <code style="color:#9ab0cc;font-size:12px">'+String(d.NUDOCUMENTO||'')+'</code>'
@@ -534,6 +570,8 @@ function render(){
       +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
       +'<td class="'+vc(dA)+'">'+brl(dA)+'</td>'
       +'<td class="'+vc(dB)+'">'+brl(dB)+'</td>'
+      +'<td class="'+vc(dC)+'">'+brl(dC)+'</td>'
+      +'<td class="'+vc(dD)+'">'+brl(dD)+'</td>'
       +'<td style="font-size:11px">'+(d.minData||'\u2014')+'</td>'
       +'<td class="left"></td><td class="left"></td><td class="left"></td>'
       +'</tr>';
@@ -549,7 +587,7 @@ function render(){
         +'<td class="left"><code style="font-size:11px;color:var(--navy)">'+r.COCONTACONTABIL+'</code>'+contaNome+'</td>'
         +'<td class="'+(Math.abs(vlA)<0.005?'vz':vc(vlA))+'">'+(Math.abs(vlA)<0.005?'\u2014':brl(vlA))+'</td>'
         +'<td class="'+(Math.abs(vlP)<0.005?'vz':vc(vlP))+'">'+(Math.abs(vlP)<0.005?'\u2014':brl(vlP))+'</td>'
-        +'<td class="vz">\u2014</td><td class="vz">\u2014</td>'
+        +'<td class="vz">\u2014</td><td class="vz">\u2014</td><td class="vz">\u2014</td><td class="vz">\u2014</td>'
         +'<td style="font-size:11px">'+(r.DATA||'\u2014')+'</td>'
         +'<td class="left"><code style="font-size:11px">'+emitKey(r)+'</code></td>'
         +'<td class="left"><code style="font-size:11px">'+String(r.NUDOCUMENTO||'')+'</code></td>'
@@ -557,16 +595,20 @@ function render(){
         +'</tr>';
     });
   });
-  tb.innerHTML=html||'<tr><td colspan="11" style="text-align:center;padding:24px;color:var(--muted)">Nenhum documento encontrado.</td></tr>';
+  tb.innerHTML=html||'<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted)">Nenhum documento encontrado.</td></tr>';
   const totA=filDocs.reduce((s,d)=>s+n(d.totAtivo),0);
   const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
   const totD1=filDocs.reduce((s,d)=>s+n(d.divEQ1),0);
   const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
+  const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
+  const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
   tf.innerHTML='<td class="left" colspan="3">Total &middot; '+filDocs.length.toLocaleString('pt-BR')+' documento(s)</td>'
     +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
     +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
     +'<td class="'+vc(totD1)+'">'+brl(totD1)+'</td>'
     +'<td class="'+vc(totD2)+'">'+brl(totD2)+'</td>'
+    +'<td class="'+vc(totD3)+'">'+brl(totD3)+'</td>'
+    +'<td class="'+vc(totD4)+'">'+brl(totD4)+'</td>'
     +'<td colspan="4"></td>';
   document.getElementById('ttitle').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s)';
   paginar();
@@ -584,14 +626,20 @@ function kpis(){
   const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
   const totD1=filDocs.reduce((s,d)=>s+n(d.divEQ1),0);
   const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
+  const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
+  const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
   document.getElementById('kv-ativo').innerHTML='<span class="'+vc(totA)+'">'+brl(totA)+'</span>';
   document.getElementById('kv-passivo').innerHTML='<span class="'+vc(totP)+'">'+brl(totP)+'</span>';
   document.getElementById('kv-eq1').innerHTML='<span class="'+vc(totD1)+'">'+brl(totD1)+'</span>';
   document.getElementById('kv-eq2').innerHTML='<span class="'+vc(totD2)+'">'+brl(totD2)+'</span>';
+  document.getElementById('kv-eq3').innerHTML='<span class="'+vc(totD3)+'">'+brl(totD3)+'</span>';
+  document.getElementById('kv-eq4').innerHTML='<span class="'+vc(totD4)+'">'+brl(totD4)+'</span>';
   document.getElementById('ks-ativo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('ks-passivo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('kpi-eq1').className='kpi'+(Math.abs(totD1)>0.005?' ka':'');
   document.getElementById('kpi-eq2').className='kpi'+(Math.abs(totD2)>0.005?' km':'');
+  document.getElementById('kpi-eq3').className='kpi'+(Math.abs(totD3)>0.005?' kg':'');
+  document.getElementById('kpi-eq4').className='kpi'+(Math.abs(totD4)>0.005?' kv4':'');
 }
 
 function paginar(){
@@ -640,6 +688,8 @@ function limpar(){
   filterMode='all';
   document.getElementById('btn-eq1').classList.remove('active');
   document.getElementById('btn-eq2').classList.remove('active');
+  document.getElementById('btn-eq3').classList.remove('active');
+  document.getElementById('btn-eq4').classList.remove('active');
   document.getElementById('feq').value='';
   aplicar();
 }
