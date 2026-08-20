@@ -11,6 +11,8 @@ Equações monitoradas (extensíveis em EQUACOES):
   EQ2: 218820101 = 113620102 + 113620104
   EQ3: 218820104 = 112120101
   EQ4: 218820107 = 112120104
+  EQ5: 218820108 = 112120107
+  EQ6: 218924019 = 112322200
 
 Natureza das contas:
   Classe 1 (Ativo)  — devedora: VLNET = D - C
@@ -59,6 +61,12 @@ EQUACOES = [
     {"id": "EQ4", "desc": "218820107 = 112120104",
      "passivo_exact": [218820107], "passivo_prefix": None,
      "ativo": [112120104]},
+    {"id": "EQ5", "desc": "218820108 = 112120107",
+     "passivo_exact": [218820108], "passivo_prefix": None,
+     "ativo": [112120107]},
+    {"id": "EQ6", "desc": "218924019 = 112322200",
+     "passivo_exact": [218924019], "passivo_prefix": None,
+     "ativo": [112322200]},
 ]
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
@@ -85,15 +93,10 @@ SELECT
   v.INMES,
   v.COGESTAO                                      AS COGESTAO_EMIT,
   v.COUG                                          AS COUG_EMIT,
-  TRIM(ge.NOGESTAO)                               AS NOGESTAO_EMIT,
-  TRIM(ue.NOUG)                                   AS NOUG_EMIT,
   v.COGESTAOCONTAB                                AS COGESTAO,
   v.COUGCONTAB                                    AS COUG,
-  TRIM(gc.NOGESTAO)                               AS NOGESTAO,
-  TRIM(uc.NOUG)                                   AS NOUG,
   TRIM(v.NUDOCUMENTO)                             AS NUDOCUMENTO,
   TO_CHAR(v.COCONTACONTABIL)                      AS COCONTACONTABIL,
-  TRIM(c.NOCONTACONTABIL)                         AS NOCONTACONTABIL,
   v.COEVENTO,
   TO_CHAR(MIN(v.DALANCAMENTO), 'DD/MM/YYYY')      AS DATA,
   TO_CHAR(MIN(v.DALANCAMENTO), 'YYYY/MM/DD')      AS DATA_ISO,
@@ -107,18 +110,29 @@ SELECT
     END
   ), 2) AS VLNET
 FROM {SCHEMA}VLANCAMENTOCONTABIL v
-LEFT JOIN {SCHEMA}VUNIDADEGESTORA uc ON uc.COUG     = v.COUGCONTAB
-LEFT JOIN {SCHEMA}VUNIDADEGESTORA ue ON ue.COUG     = v.COUG
-LEFT JOIN {SCHEMA}VCONTACONTABIL  c  ON c.COCONTACONTABIL = v.COCONTACONTABIL
-LEFT JOIN {SCHEMA}GESTAO          gc ON gc.COGESTAO = v.COGESTAOCONTAB
-LEFT JOIN {SCHEMA}GESTAO          ge ON ge.COGESTAO = v.COGESTAO
 WHERE ({_where_contas()})
 GROUP BY
-  v.INMES, v.COGESTAO, v.COUG, ge.NOGESTAO, ue.NOUG,
-  v.COGESTAOCONTAB, v.COUGCONTAB, gc.NOGESTAO, uc.NOUG,
-  TRIM(v.NUDOCUMENTO), TO_CHAR(v.COCONTACONTABIL), c.NOCONTACONTABIL,
+  v.INMES, v.COGESTAO, v.COUG,
+  v.COGESTAOCONTAB, v.COUGCONTAB,
+  TRIM(v.NUDOCUMENTO), TO_CHAR(v.COCONTACONTABIL),
   v.COEVENTO
 ORDER BY MIN(v.DALANCAMENTO), v.COUG, TRIM(v.NUDOCUMENTO), TO_CHAR(v.COCONTACONTABIL)
+"""
+
+SQL_UG = f"""
+SELECT TO_CHAR(COUG) AS COUG, TRIM(NOUG) AS NOUG
+FROM {SCHEMA}VUNIDADEGESTORA
+"""
+
+SQL_GESTAO = f"""
+SELECT TO_CHAR(COGESTAO) AS COGESTAO, TRIM(NOGESTAO) AS NOGESTAO
+FROM {SCHEMA}GESTAO
+"""
+
+SQL_CONTA = f"""
+SELECT TO_CHAR(COCONTACONTABIL) AS COCONTACONTABIL, TRIM(NOCONTACONTABIL) AS NOCONTACONTABIL
+FROM {SCHEMA}VCONTACONTABIL
+WHERE COCONTACONTABIL IN ({",".join(str(c) for c in sorted(_CONTAS_ATIVO + _CONTAS_EXATAS))})
 """
 
 # ── HTML Template ─────────────────────────────────────────────────────────────
@@ -176,6 +190,10 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .btn-eq3.active,.btn-eq3:hover{background:#2e7d32;color:#fff;border-color:#2e7d32}
 .btn-eq4{background:#ede7f6;color:#5e35b1;border:1.5px solid #ce93d8}
 .btn-eq4.active,.btn-eq4:hover{background:#5e35b1;color:#fff;border-color:#5e35b1}
+.btn-eq5{background:#fff3e0;color:#e65100;border:1.5px solid #ffcc80}
+.btn-eq5.active,.btn-eq5:hover{background:#e65100;color:#fff;border-color:#e65100}
+.btn-eq6{background:#e0f7fa;color:#00695c;border:1.5px solid #80cbc4}
+.btn-eq6.active,.btn-eq6:hover{background:#00695c;color:#fff;border-color:#00695c}
 .emit-wrap{position:relative;min-width:180px}
 .emit-in{border:2px solid var(--teal);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;box-shadow:0 0 0 2px rgba(0,144,168,.08)}
 .emit-in:focus{outline:none;border-color:var(--navy)}
@@ -188,6 +206,8 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .kpi.km::before{background:linear-gradient(90deg,var(--amber),#e6b800)}
 .kpi.kg::before{background:linear-gradient(90deg,#2e7d32,#43a047)}
 .kpi.kv4::before{background:linear-gradient(90deg,#5e35b1,#7e57c2)}
+.kpi.kv5::before{background:linear-gradient(90deg,#e65100,#fb8c00)}
+.kpi.kv6::before{background:linear-gradient(90deg,#00695c,#00897b)}
 .kl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .kv{font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1}
 .ks{font-size:11px;color:var(--muted);margin-top:5px}
@@ -271,6 +291,8 @@ tfoot tr td.left{text-align:left}
     <button class="btn btn-eq2" id="btn-eq2" onclick="filtrarEq('eq2')">&#9888; Diverg. EQ2</button>
     <button class="btn btn-eq3" id="btn-eq3" onclick="filtrarEq('eq3')">&#9888; Diverg. EQ3</button>
     <button class="btn btn-eq4" id="btn-eq4" onclick="filtrarEq('eq4')">&#9888; Diverg. EQ4</button>
+    <button class="btn btn-eq5" id="btn-eq5" onclick="filtrarEq('eq5')">&#9888; Diverg. EQ5</button>
+    <button class="btn btn-eq6" id="btn-eq6" onclick="filtrarEq('eq6')">&#9888; Diverg. EQ6</button>
     <button class="btn btn-g" onclick="limpar()">&#8635; Limpar filtros</button>
     <button class="btn btn-p" onclick="exportarCSV()">&#8615; Exportar CSV</button>
   </div>
@@ -307,6 +329,16 @@ tfoot tr td.left{text-align:left}
     <div class="kv" id="kv-eq4">&#8212;</div>
     <div class="ks">218820107 = 112120104</div>
   </div>
+  <div class="kpi" id="kpi-eq5">
+    <div class="kl">Diverg&#234;ncia EQ5</div>
+    <div class="kv" id="kv-eq5">&#8212;</div>
+    <div class="ks">218820108 = 112120107</div>
+  </div>
+  <div class="kpi" id="kpi-eq6">
+    <div class="kl">Diverg&#234;ncia EQ6</div>
+    <div class="kv" id="kv-eq6">&#8212;</div>
+    <div class="ks">218924019 = 112322200</div>
+  </div>
 </div>
 
 <div class="tsec">
@@ -331,17 +363,14 @@ tfoot tr td.left{text-align:left}
         <th class="left nosort" style="width:115px">Conta Cont&#225;bil</th>
         <th style="width:120px" onclick="sortBy('ATIVO')">Ativo <span id="s_ATIVO" class="si">&#8645;</span></th>
         <th style="width:120px" onclick="sortBy('PASSIVO')">Passivo <span id="s_PASSIVO" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('DIV1')">Diverg. EQ1 <span id="s_DIV1" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('DIV2')">Diverg. EQ2 <span id="s_DIV2" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('DIV3')">Diverg. EQ3 <span id="s_DIV3" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('DIV4')">Diverg. EQ4 <span id="s_DIV4" class="si">&#8645;</span></th>
+        <th style="width:160px" onclick="sortBy('DIV')">Diverg&#234;ncia <span id="s_DIV" class="si">&#8645;</span></th>
         <th style="width:88px" onclick="sortBy('DATA')">Data Lan&#231;. <span id="s_DATA" class="si">&#8645;</span></th>
         <th class="left nosort" style="width:120px">Gest&#227;o-UG Emitente</th>
         <th class="left" style="width:130px" onclick="sortBy('NUDOC')">N&#186; Documento <span id="s_NUDOC" class="si">&#8645;</span></th>
         <th class="left nosort" style="width:70px">Evento</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
-      <tfoot><tr id="tfoot-row"><td class="left" colspan="13">&#8212;</td></tr></tfoot>
+      <tfoot><tr id="tfoot-row"><td class="left" colspan="10">&#8212;</td></tr></tfoot>
     </table>
   </div>
   <div id="pgbar-bot" class="pgbar"></div>
@@ -352,6 +381,9 @@ tfoot tr td.left{text-align:left}
 const NOMES_MES={1:'Janeiro',2:'Fevereiro',3:'Mar\u00e7o',4:'Abril',5:'Maio',6:'Junho',
                  7:'Julho',8:'Agosto',9:'Setembro',10:'Outubro',11:'Novembro',12:'Dezembro'};
 const EQUACOES=__EQUACOES__;
+const UG_NAMES=__UG_NAMES__;
+const GESTAO_NAMES=__GESTAO_NAMES__;
+const CONTA_NAMES=__CONTA_NAMES__;
 const PG_SZ=50;
 let fil=[], filDocs=[], pg=1, sortCol='DATA', sortDir=1;
 let emitSel='', filterMode='all';
@@ -366,7 +398,12 @@ function decomp(b64){
     c.push(value);rd.read().then(p);
   });});
 }
-decomp('__DADOS__').then(txt=>{window.ALL=JSON.parse(txt);init();});
+decomp('__DADOS__').then(txt=>{
+  const p=JSON.parse(txt);
+  const cols=p.cols;
+  window.ALL=p.rows.map(r=>Object.fromEntries(cols.map((k,i)=>[k,r[i]])));
+  init();
+});
 
 function n(v){return v==null?0:+v||0;}
 function brl(v){
@@ -378,7 +415,7 @@ function brl(v){
 function vc(v){return Math.abs(n(v))<0.005?'vz':n(v)>0?'vp':'vn';}
 const fmtG=v=>v!=null?String(v).padStart(6,'0'):'\u2014';
 function emitKey(r){return fmtG(r.COGESTAO_EMIT)+'-'+String(r.COUG_EMIT);}
-function ugLabel(r){return fmtG(r.COGESTAO)+' \u00b7 '+String(r.COUG)+(r.NOUG?' \u2014 '+r.NOUG:'');}
+function ugLabel(r){const nm=UG_NAMES[String(r.COUG)];return fmtG(r.COGESTAO)+' \u00b7 '+String(r.COUG)+(nm?' \u2014 '+nm:'');}
 function isAtivo(conta){return EQUACOES.some(eq=>eq.ativo.includes(+conta));}
 function isPassivo(conta){
   const s=String(conta);
@@ -404,18 +441,15 @@ function onAC(k){
   let items=[];
   if(k==='g'){
     const m=new Map();
-    window.ALL.forEach(r=>{const id=String(r.COGESTAO_EMIT);if(!m.has(id))m.set(id,(r.NOGESTAO_EMIT||'').trim());});
-    items=[...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
-      .filter(([id,nm])=>!v||fmtG(id).includes(v)||nm.toLowerCase().includes(v)).slice(0,60)
-      .map(([id,nm])=>{const lbl=(fmtG(id)+(nm?' - '+nm:'')).replace(/'/g,"\\'");
+    const gIds=[...new Set(window.ALL.map(r=>String(r.COGESTAO_EMIT)))].sort();
+    items=gIds.filter(id=>{const nm=GESTAO_NAMES[id]||'';return !v||fmtG(id).includes(v)||nm.toLowerCase().includes(v);}).slice(0,60)
+      .map(id=>{const nm=GESTAO_NAMES[id]||'';const lbl=(fmtG(id)+(nm?' - '+nm:'')).replace(/'/g,"\\'");
         return '<div class="ac-dd-item" onclick="selAC(\'g\',\''+id+'\',\''+lbl+'\')">'
           +'<strong>'+fmtG(id)+'</strong>'+(nm?' - '+nm:'')+'</div>';});
   }else{
-    const m=new Map();
-    window.ALL.forEach(r=>{const id=String(r.COUG_EMIT);if(!m.has(id))m.set(id,(r.NOUG_EMIT||'').trim());});
-    items=[...m.entries()].sort((a,b)=>a[0].localeCompare(b[0]))
-      .filter(([id,nm])=>!v||id.includes(v)||nm.toLowerCase().includes(v)).slice(0,60)
-      .map(([id,nm])=>{const lbl=(id+(nm?' \u2014 '+nm:'')).replace(/'/g,"\\'");
+    const uIds=[...new Set(window.ALL.map(r=>String(r.COUG_EMIT)))].sort();
+    items=uIds.filter(id=>{const nm=UG_NAMES[id]||'';return !v||id.includes(v)||nm.toLowerCase().includes(v);}).slice(0,60)
+      .map(id=>{const nm=UG_NAMES[id]||'';const lbl=(id+(nm?' \u2014 '+nm:'')).replace(/'/g,"\\'");
         return '<div class="ac-dd-item" onclick="selAC(\'u\',\''+id+'\',\''+lbl+'\')">'
           +'<strong>'+id+'</strong>'+(nm?' \u2014 '+nm:'')+'</div>';});
   }
@@ -458,11 +492,13 @@ function filtrarEq(mode){
   document.getElementById('btn-eq2').classList.toggle('active',filterMode==='eq2');
   document.getElementById('btn-eq3').classList.toggle('active',filterMode==='eq3');
   document.getElementById('btn-eq4').classList.toggle('active',filterMode==='eq4');
+  document.getElementById('btn-eq5').classList.toggle('active',filterMode==='eq5');
+  document.getElementById('btn-eq6').classList.toggle('active',filterMode==='eq6');
   aplicar();
 }
 
 /* Ordenacao */
-const SORT_COLS=['UG','ATIVO','PASSIVO','DIV1','DIV2','DIV3','DIV4','DATA','NUDOC'];
+const SORT_COLS=['UG','ATIVO','PASSIVO','DIV','DATA','NUDOC'];
 function sortBy(col){
   if(sortCol===col){sortDir*=-1;}else{sortCol=col;sortDir=1;}
   SORT_COLS.forEach(c=>{const el=document.getElementById('s_'+c);if(el)el.textContent=c===sortCol?(sortDir>0?'\u2191':'\u2193'):'\u21c5';});
@@ -473,10 +509,7 @@ function cmpDocs(a,b){
   if(sortCol==='NUDOC')   return sortDir*String(a.NUDOCUMENTO).localeCompare(String(b.NUDOCUMENTO),'pt-BR');
   if(sortCol==='ATIVO')   return sortDir*(n(a.totAtivo)-n(b.totAtivo));
   if(sortCol==='PASSIVO') return sortDir*(n(a.totPassivo)-n(b.totPassivo));
-  if(sortCol==='DIV1')    return sortDir*(n(a.divEQ1)-n(b.divEQ1));
-  if(sortCol==='DIV2')    return sortDir*(n(a.divEQ2)-n(b.divEQ2));
-  if(sortCol==='DIV3')    return sortDir*(n(a.divEQ3)-n(b.divEQ3));
-  if(sortCol==='DIV4')    return sortDir*(n(a.divEQ4)-n(b.divEQ4));
+  if(sortCol==='DIV')     return sortDir*(Math.abs(n(a.maxDiv))-Math.abs(n(b.maxDiv)));
   if(sortCol==='UG')      return sortDir*(a.emitKey||'').localeCompare(b.emitKey||'','pt-BR');
   return 0;
 }
@@ -517,7 +550,7 @@ function aplicar(){
     const k=ek+'|'+(r.NUDOCUMENTO||'');
     if(!map[k])map[k]={key:k,emitKey:ek,NUDOCUMENTO:r.NUDOCUMENTO,rows:[],
                        minData:null,minDataISO:null,
-                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,byAcct:{}};
+                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,divEQ5:0,divEQ6:0,byAcct:{}};
     const d=map[k];
     d.rows.push(r);
     const vl=n(r.VLNET),acct=+r.COCONTACONTABIL;
@@ -535,7 +568,10 @@ function aplicar(){
       if(eq.id==='EQ2')d.divEQ2=div;
       if(eq.id==='EQ3')d.divEQ3=div;
       if(eq.id==='EQ4')d.divEQ4=div;
+      if(eq.id==='EQ5')d.divEQ5=div;
+      if(eq.id==='EQ6')d.divEQ6=div;
     });
+    d.maxDiv=[d.divEQ1,d.divEQ2,d.divEQ3,d.divEQ4,d.divEQ5,d.divEQ6].reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
   });
   filDocs=Object.values(map).filter(d=>{
     if(emitSel&&d.emitKey!==emitSel)return false;
@@ -543,6 +579,8 @@ function aplicar(){
     if(filterMode==='eq2'&&Math.abs(d.divEQ2)<0.005)return false;
     if(filterMode==='eq3'&&Math.abs(d.divEQ3)<0.005)return false;
     if(filterMode==='eq4'&&Math.abs(d.divEQ4)<0.005)return false;
+    if(filterMode==='eq5'&&Math.abs(d.divEQ5)<0.005)return false;
+    if(filterMode==='eq6'&&Math.abs(d.divEQ6)<0.005)return false;
     if(busca){
       const docOk=String(d.NUDOCUMENTO||'').toLowerCase().includes(busca);
       const evOk=d.rows.some(r=>r.COEVENTO!=null&&String(r.COEVENTO).toLowerCase().includes(busca));
@@ -559,7 +597,16 @@ function render(){
   let html='';
   filDocs.slice(start,end).forEach(d=>{
     const did='d'+d.key.replace(/[^a-z0-9]/gi,'_');
-    const dA=n(d.divEQ1),dB=n(d.divEQ2),dC=n(d.divEQ3),dD=n(d.divEQ4),totA=n(d.totAtivo),totP=n(d.totPassivo);
+    const totA=n(d.totAtivo),totP=n(d.totPassivo);
+    const _dp=[];
+    if(Math.abs(n(d.divEQ1))>=0.005)_dp.push('EQ1\u00a0'+brl(n(d.divEQ1)));
+    if(Math.abs(n(d.divEQ2))>=0.005)_dp.push('EQ2\u00a0'+brl(n(d.divEQ2)));
+    if(Math.abs(n(d.divEQ3))>=0.005)_dp.push('EQ3\u00a0'+brl(n(d.divEQ3)));
+    if(Math.abs(n(d.divEQ4))>=0.005)_dp.push('EQ4\u00a0'+brl(n(d.divEQ4)));
+    if(Math.abs(n(d.divEQ5))>=0.005)_dp.push('EQ5\u00a0'+brl(n(d.divEQ5)));
+    if(Math.abs(n(d.divEQ6))>=0.005)_dp.push('EQ6\u00a0'+brl(n(d.divEQ6)));
+    const divStr=_dp.length?_dp.join(' / '):'\u2014';
+    const hasdiv=_dp.length>0;
     html+='<tr class="row-doc" onclick="toggleDoc(\''+did+'\')">'
       +'<td class="left" colspan="3"><span class="tog" id="tog_'+did+'">&#9654;</span>'
       +' <code style="color:#9ab0cc;font-size:12px">'+String(d.NUDOCUMENTO||'')+'</code>'
@@ -568,10 +615,7 @@ function render(){
       +' <span style="font-size:10px;font-weight:400;opacity:.45">('+d.rows.length+' lan\u00e7.)</span></td>'
       +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
       +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
-      +'<td class="'+vc(dA)+'">'+brl(dA)+'</td>'
-      +'<td class="'+vc(dB)+'">'+brl(dB)+'</td>'
-      +'<td class="'+vc(dC)+'">'+brl(dC)+'</td>'
-      +'<td class="'+vc(dD)+'">'+brl(dD)+'</td>'
+      +'<td class="'+(hasdiv?'vp':'vz')+'" style="font-size:11px;white-space:nowrap">'+divStr+'</td>'
       +'<td style="font-size:11px">'+(d.minData||'\u2014')+'</td>'
       +'<td class="left"></td><td class="left"></td><td class="left"></td>'
       +'</tr>';
@@ -580,14 +624,14 @@ function render(){
       const vl=n(r.VLNET),acct=+r.COCONTACONTABIL;
       const vlA=isAtivo(acct)?vl:0,vlP=isPassivo(acct)?vl:0;
       const evStr=r.COEVENTO!=null?String(r.COEVENTO):'\u2014';
-      const contaNome=r.NOCONTACONTABIL?' <span style="font-size:10px;opacity:.65">'+r.NOCONTACONTABIL+'</span>':'';
+      const contaNome=CONTA_NAMES[r.COCONTACONTABIL]?' <span style="font-size:10px;opacity:.65">'+CONTA_NAMES[r.COCONTACONTABIL]+'</span>':'';
       html+='<tr class="dr'+(j%2?' alt':'')+'" data-doc="'+did+'">'
         +'<td></td>'
         +'<td class="left" style="font-size:11px;padding-left:24px">'+ugLabel(r)+'</td>'
         +'<td class="left"><code style="font-size:11px;color:var(--navy)">'+r.COCONTACONTABIL+'</code>'+contaNome+'</td>'
         +'<td class="'+(Math.abs(vlA)<0.005?'vz':vc(vlA))+'">'+(Math.abs(vlA)<0.005?'\u2014':brl(vlA))+'</td>'
         +'<td class="'+(Math.abs(vlP)<0.005?'vz':vc(vlP))+'">'+(Math.abs(vlP)<0.005?'\u2014':brl(vlP))+'</td>'
-        +'<td class="vz">\u2014</td><td class="vz">\u2014</td><td class="vz">\u2014</td><td class="vz">\u2014</td>'
+        +'<td class="vz">\u2014</td>'
         +'<td style="font-size:11px">'+(r.DATA||'\u2014')+'</td>'
         +'<td class="left"><code style="font-size:11px">'+emitKey(r)+'</code></td>'
         +'<td class="left"><code style="font-size:11px">'+String(r.NUDOCUMENTO||'')+'</code></td>'
@@ -595,20 +639,14 @@ function render(){
         +'</tr>';
     });
   });
-  tb.innerHTML=html||'<tr><td colspan="13" style="text-align:center;padding:24px;color:var(--muted)">Nenhum documento encontrado.</td></tr>';
+  tb.innerHTML=html||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Nenhum documento encontrado.</td></tr>';
   const totA=filDocs.reduce((s,d)=>s+n(d.totAtivo),0);
   const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
-  const totD1=filDocs.reduce((s,d)=>s+n(d.divEQ1),0);
-  const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
-  const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
-  const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
+  const nDiv=filDocs.filter(d=>Math.abs(n(d.maxDiv))>=0.005).length;
   tf.innerHTML='<td class="left" colspan="3">Total &middot; '+filDocs.length.toLocaleString('pt-BR')+' documento(s)</td>'
     +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
     +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
-    +'<td class="'+vc(totD1)+'">'+brl(totD1)+'</td>'
-    +'<td class="'+vc(totD2)+'">'+brl(totD2)+'</td>'
-    +'<td class="'+vc(totD3)+'">'+brl(totD3)+'</td>'
-    +'<td class="'+vc(totD4)+'">'+brl(totD4)+'</td>'
+    +'<td class="'+(nDiv>0?'vp':'vz')+'" style="font-size:11px">'+(nDiv>0?nDiv.toLocaleString('pt-BR')+' com diverg.':'—')+'</td>'
     +'<td colspan="4"></td>';
   document.getElementById('ttitle').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s)';
   paginar();
@@ -628,18 +666,24 @@ function kpis(){
   const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
   const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
   const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
+  const totD5=filDocs.reduce((s,d)=>s+n(d.divEQ5),0);
+  const totD6=filDocs.reduce((s,d)=>s+n(d.divEQ6),0);
   document.getElementById('kv-ativo').innerHTML='<span class="'+vc(totA)+'">'+brl(totA)+'</span>';
   document.getElementById('kv-passivo').innerHTML='<span class="'+vc(totP)+'">'+brl(totP)+'</span>';
   document.getElementById('kv-eq1').innerHTML='<span class="'+vc(totD1)+'">'+brl(totD1)+'</span>';
   document.getElementById('kv-eq2').innerHTML='<span class="'+vc(totD2)+'">'+brl(totD2)+'</span>';
   document.getElementById('kv-eq3').innerHTML='<span class="'+vc(totD3)+'">'+brl(totD3)+'</span>';
   document.getElementById('kv-eq4').innerHTML='<span class="'+vc(totD4)+'">'+brl(totD4)+'</span>';
+  document.getElementById('kv-eq5').innerHTML='<span class="'+vc(totD5)+'">'+brl(totD5)+'</span>';
+  document.getElementById('kv-eq6').innerHTML='<span class="'+vc(totD6)+'">'+brl(totD6)+'</span>';
   document.getElementById('ks-ativo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('ks-passivo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('kpi-eq1').className='kpi'+(Math.abs(totD1)>0.005?' ka':'');
   document.getElementById('kpi-eq2').className='kpi'+(Math.abs(totD2)>0.005?' km':'');
   document.getElementById('kpi-eq3').className='kpi'+(Math.abs(totD3)>0.005?' kg':'');
   document.getElementById('kpi-eq4').className='kpi'+(Math.abs(totD4)>0.005?' kv4':'');
+  document.getElementById('kpi-eq5').className='kpi'+(Math.abs(totD5)>0.005?' kv5':'');
+  document.getElementById('kpi-eq6').className='kpi'+(Math.abs(totD6)>0.005?' kv6':'');
 }
 
 function paginar(){
@@ -668,9 +712,9 @@ function exportarCSV(){
   const linhas=[hdrs.join(';')];
   fil.forEach(r=>{
     const vl=n(r.VLNET),acct=+r.COCONTACONTABIL;
-    linhas.push([r.INMES,fmtG(r.COGESTAO_EMIT),r.COUG_EMIT,(r.NOUG_EMIT||'').trim(),
-                 fmtG(r.COGESTAO),r.COUG,(r.NOUG||'').trim(),
-                 r.NUDOCUMENTO||'',r.COCONTACONTABIL,(r.NOCONTACONTABIL||'').trim(),
+    linhas.push([r.INMES,fmtG(r.COGESTAO_EMIT),r.COUG_EMIT,(UG_NAMES[String(r.COUG_EMIT)]||''),
+                 fmtG(r.COGESTAO),r.COUG,(UG_NAMES[String(r.COUG)]||''),
+                 r.NUDOCUMENTO||'',r.COCONTACONTABIL,(CONTA_NAMES[r.COCONTACONTABIL]||''),
                  cel(isAtivo(acct)?vl:0),cel(isPassivo(acct)?vl:0),
                  r.DATA||'',r.COEVENTO!=null?r.COEVENTO:''].join(';'));
   });
@@ -690,6 +734,8 @@ function limpar(){
   document.getElementById('btn-eq2').classList.remove('active');
   document.getElementById('btn-eq3').classList.remove('active');
   document.getElementById('btn-eq4').classList.remove('active');
+  document.getElementById('btn-eq5').classList.remove('active');
+  document.getElementById('btn-eq6').classList.remove('active');
   document.getElementById('feq').value='';
   aplicar();
 }
@@ -705,40 +751,58 @@ window.aplicar=aplicar;window.limpar=limpar;window.exportarCSV=exportarCSV;windo
 
 
 # ── Extração ──────────────────────────────────────────────────────────────────
-def extrair() -> pd.DataFrame:
+def extrair():
     oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT_DIR)
     print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle…")
     with oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN) as conn:
         print(f"[{datetime.now():%H:%M:%S}] Executando consulta (todos os meses)…")
-        df = pd.read_sql(SQL, conn)
+        df       = pd.read_sql(SQL,        conn)
+        df_ug    = pd.read_sql(SQL_UG,     conn)
+        df_gest  = pd.read_sql(SQL_GESTAO, conn)
+        df_conta = pd.read_sql(SQL_CONTA,  conn)
     print(f"  {len(df):,} linhas ({df['COUG_EMIT'].nunique()} UGs emitentes, "
           f"{df['INMES'].nunique()} meses).")
-    return df
+    ug_names    = dict(zip(df_ug["COUG"].astype(str),    df_ug["NOUG"]))
+    gestao_names= dict(zip(df_gest["COGESTAO"].astype(str), df_gest["NOGESTAO"]))
+    conta_names = dict(zip(df_conta["COCONTACONTABIL"].astype(str), df_conta["NOCONTACONTABIL"]))
+    return df, ug_names, gestao_names, conta_names
 
 
 # ── Geração do HTML ───────────────────────────────────────────────────────────
-def gerar_html(df: pd.DataFrame) -> str:
-    registros = df.to_dict(orient="records")
-    for r in registros:
-        for k, v in list(r.items()):
+def gerar_html(df: pd.DataFrame, ug_names: dict, gestao_names: dict, conta_names: dict) -> str:
+    cols = list(df.columns)
+    rows = []
+    for r in df.itertuples(index=False):
+        row = []
+        for v in r:
             if isinstance(v, float) and pd.isna(v):
-                r[k] = None
+                row.append(None)
             elif hasattr(v, "item"):
-                r[k] = v.item()
+                row.append(v.item())
+            else:
+                row.append(v)
+        rows.append(row)
 
-    json_str  = json.dumps(registros, ensure_ascii=False, separators=(",", ":"))
+    payload   = {"cols": cols, "rows": rows}
+    json_str  = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     dados_b64 = base64.b64encode(
         gzip.compress(json_str.encode("utf-8"), compresslevel=9)
     ).decode()
     print(f"  JSON: {len(json_str)//1024} KB → comprimido: {len(dados_b64)//1024} KB")
 
-    eq_js = json.dumps(EQUACOES, ensure_ascii=False)
-    ts    = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    eq_js      = json.dumps(EQUACOES,     ensure_ascii=False)
+    ug_js      = json.dumps(ug_names,     ensure_ascii=False)
+    gestao_js  = json.dumps(gestao_names, ensure_ascii=False)
+    conta_js   = json.dumps(conta_names,  ensure_ascii=False)
+    ts         = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
 
     html = HTML_TEMPLATE
-    html = html.replace("__EQUACOES__", eq_js)
-    html = html.replace("'__DADOS__'",  "'" + dados_b64 + "'")
-    html = html.replace("__TIMESTAMP__", ts)
+    html = html.replace("__EQUACOES__",    eq_js)
+    html = html.replace("__UG_NAMES__",    ug_js)
+    html = html.replace("__GESTAO_NAMES__",gestao_js)
+    html = html.replace("__CONTA_NAMES__", conta_js)
+    html = html.replace("'__DADOS__'",     "'" + dados_b64 + "'")
+    html = html.replace("__TIMESTAMP__",   ts)
     return html
 
 
@@ -763,9 +827,9 @@ def main():
     a = ap.parse_args()
 
     print(f"[{datetime.now():%H:%M:%S}] Correspondência Ativo x Passivo — por lançamento…")
-    df   = extrair()
+    df, ug_names, gestao_names, conta_names = extrair()
     print(f"[{datetime.now():%H:%M:%S}] Gerando HTML…")
-    html = gerar_html(df)
+    html = gerar_html(df, ug_names, gestao_names, conta_names)
 
     html_path = PASTA / ARQUIVO_HTML
     html_path.write_text(html, encoding="utf-8")
