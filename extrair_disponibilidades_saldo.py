@@ -699,7 +699,7 @@ def main():
         for mes in range(15):
             print(f"[{datetime.now().strftime('%H:%M:%S')}] Mês {mes}...", end=" ")
             try:
-                df_mes = run(f"AND s.INMES = {mes}")
+                df_mes = run(f"AND s.INMES <= {mes}")
                 if not df_mes.empty:
                     dados_por_mes[str(mes)] = df_mes.to_dict(orient="records")
                     print(f"{len(df_mes):,} registros.")

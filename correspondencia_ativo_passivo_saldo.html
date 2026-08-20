@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<!-- v-corresp-saldo-1 -->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Correspondência Ativo x Passivo — por Saldo — SIGGO</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --navy:#0d1b3e;--navy-mid:#162550;--navy-light:#1e3267;
+  --teal:#0090a8;--teal-light:#00b8d4;
+  --surface:#fff;--bg:#f2f5f9;--border:#dce3ed;
+  --row-alt:#f4f7fb;--hover:#e8f0f8;
+  --text:#1a2033;--muted:#6b7a99;
+  --red:#c0392b;--amber:#b7860b;--green:#1a7a44;--radius:10px;
+  --shadow:0 2px 12px rgba(13,27,62,.10);
+}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
+header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 3px 16px rgba(13,27,62,.35);position:sticky;top:0;z-index:100}
+.hlogo{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-right:14px}
+header h1{font-size:14px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-transform:none;letter-spacing:0;margin-top:1px}
+#ts{font-size:11px;color:#7a99bb;white-space:nowrap}
+.fbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.fg select{border:1.5px solid var(--border);border-radius:6px;padding:7px 28px 7px 10px;font-size:12.5px;min-width:130px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7a99' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--text);cursor:pointer;appearance:none}
+.fg select:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
+.ac-wrap{position:relative}
+.ac-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text)}
+.ac-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
+.ac-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}
+.ac-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
+.ac-dd-item{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)}
+.ac-dd-item:last-child{border-bottom:none}
+.ac-dd-item:hover{background:var(--hover)}
+.ac-dd-item strong{color:var(--navy);font-weight:700}
+.ac-dd-empty{padding:12px;color:var(--muted);font-size:12px;text-align:center}
+.eq-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.eq-btns label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-right:2px}
+.btn-eq{border:1.5px solid;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;transition:background .15s,color .15s}
+.btn-eq.active{color:#fff}
+.btn-eq1{border-color:#c0392b;color:#c0392b}   .btn-eq1.active{background:#c0392b}
+.btn-eq2{border-color:#b7860b;color:#b7860b}   .btn-eq2.active{background:#b7860b}
+.btn-eq3{border-color:#1a7a44;color:#1a7a44}   .btn-eq3.active{background:#1a7a44}
+.btn-eq4{border-color:#6c3483;color:#6c3483}   .btn-eq4.active{background:#6c3483}
+.btn-eq5{border-color:#b84b00;color:#b84b00}   .btn-eq5.active{background:#b84b00}
+.btn-eq6{border-color:#007b7b;color:#007b7b}   .btn-eq6.active{background:#007b7b}
+.btn-lim{border:1.5px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;background:transparent;color:var(--muted)}
+.btn-lim:hover{border-color:var(--teal);color:var(--teal)}
+.kpi-row{display:flex;flex-wrap:wrap;gap:10px;padding:14px 28px;background:var(--bg)}
+.kpi{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 16px;min-width:160px;box-shadow:var(--shadow);transition:border-color .2s}
+.kpi .kt{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.kpi .kv{font-size:15px;font-weight:700}
+.kpi.ka{border-color:#c0392b}.kpi.ka .kv{color:#c0392b}
+.kpi.km{border-color:#b7860b}.kpi.km .kv{color:#b7860b}
+.kpi.kg{border-color:#1a7a44}.kpi.kg .kv{color:#1a7a44}
+.kpi.kv4{border-color:#6c3483}.kpi.kv4 .kv{color:#6c3483}
+.kpi.kv5{border-color:#b84b00}.kpi.kv5 .kv{color:#b84b00}
+.kpi.kv6{border-color:#007b7b}.kpi.kv6 .kv{color:#007b7b}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin:0 28px 28px;overflow:hidden}
+.card-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff}
+.card-hd h2{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+#ttitle{font-size:11px;color:#9ab0cc}
+.pg-row{display:flex;gap:8px;align-items:center}
+.pg-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer}
+.pg-btn:hover{background:rgba(255,255,255,.22)}
+#pg-info{font-size:11px;color:#9ab0cc}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{position:sticky;top:58px;background:var(--navy);color:#fff;padding:9px 10px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;z-index:10}
+th:hover{background:var(--navy-light)}
+.si{font-size:10px;opacity:.65;margin-left:3px}
+td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr.row-ug{cursor:pointer}
+tr.row-ug:hover td{background:var(--hover)}
+tr.dr{background:var(--row-alt);display:none}
+tr.dr.alt{background:var(--bg)}
+tr.dr.open{display:table-row}
+.left{text-align:left}
+.vp{color:var(--red);font-weight:600;text-align:right}
+.vz{color:var(--muted);text-align:right}
+.vn{color:var(--green);text-align:right}
+td:not(.left){text-align:right}
+tfoot td{font-weight:700;background:var(--navy);color:#fff;padding:8px 10px;border:none;text-align:right}
+tfoot td.left{text-align:left}
+.tog{font-size:9px;opacity:.45;margin-right:4px;display:inline-block;transition:transform .15s}
+.tog.open{transform:rotate(90deg)}
+#loading{display:none;position:fixed;inset:0;background:rgba(13,27,62,.72);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:12px}
+#loading.show{display:flex}
+.spin{width:38px;height:38px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--teal-light);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#loading p{color:#fff;font-size:13px}
+.csv-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:8px}
+.csv-btn:hover{background:rgba(255,255,255,.2)}
+</style>
+</head>
+<body>
+<div id="loading"><div class="spin"></div><p>Descomprimindo dados&hellip;</p></div>
+<header>
+  <div style="display:flex;align-items:center">
+    <div class="hlogo">&#9878;</div>
+    <h1>Correspondência Ativo x Passivo<span>Por Saldo — VSALDOCONTABIL &middot; SIGGO &middot; Exercício 2026</span></h1>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <button class="csv-btn" onclick="exportCSV()">&#8595; CSV</button>
+    <span id="ts">19/08/2026 15:43:05</span>
+  </div>
+</header>
+
+<div class="fbar">
+  <div class="fg">
+    <label>Saldo at&#233; o m&#234;s</label>
+    <select id="fmes" onchange="aplicar()">
+      <option value="">Ano completo</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label>Gestão</label>
+    <select id="fgest" onchange="aplicar()">
+      <option value="">Todas as gestões</option>
+    </select>
+  </div>
+  <div class="fg">
+    <label>UG</label>
+    <div class="ac-wrap" style="width:300px">
+      <input id="ac-ug" class="ac-input" placeholder="Buscar UG..." autocomplete="off"
+             oninput="onAC()" onfocus="onAC()" onblur="setTimeout(()=>closeAC(),180)">
+      <button class="ac-clear" id="ac-clr" onclick="clearAC()">&#10005;</button>
+      <div class="ac-dd" id="ac-dd"></div>
+    </div>
+  </div>
+  <div class="fg">
+    <label>Filtrar por equação</label>
+    <div class="eq-btns">
+      <button id="btn-eq1" class="btn-eq btn-eq1" onclick="filtrarEq('eq1')">&#9651; Diverg. EQ1</button>
+      <button id="btn-eq2" class="btn-eq btn-eq2" onclick="filtrarEq('eq2')">&#9651; Diverg. EQ2</button>
+      <button id="btn-eq3" class="btn-eq btn-eq3" onclick="filtrarEq('eq3')">&#9651; Diverg. EQ3</button>
+      <button id="btn-eq4" class="btn-eq btn-eq4" onclick="filtrarEq('eq4')">&#9651; Diverg. EQ4</button>
+      <button id="btn-eq5" class="btn-eq btn-eq5" onclick="filtrarEq('eq5')">&#9651; Diverg. EQ5</button>
+      <button id="btn-eq6" class="btn-eq btn-eq6" onclick="filtrarEq('eq6')">&#9651; Diverg. EQ6</button>
+      <button class="btn-lim" onclick="limpar()">Limpar</button>
+    </div>
+  </div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi" id="kpi-eq1"><div class="kt">EQ1 — 21142XXXX = 113620101+103</div><div class="kv" id="kv-eq1">—</div></div>
+  <div class="kpi" id="kpi-eq2"><div class="kt">EQ2 — 218820101 = 113620102+104</div><div class="kv" id="kv-eq2">—</div></div>
+  <div class="kpi" id="kpi-eq3"><div class="kt">EQ3 — 218820104 = 112120101</div><div class="kv" id="kv-eq3">—</div></div>
+  <div class="kpi" id="kpi-eq4"><div class="kt">EQ4 — 218820107 = 112120104</div><div class="kv" id="kv-eq4">—</div></div>
+  <div class="kpi" id="kpi-eq5"><div class="kt">EQ5 — 218820108 = 112120107</div><div class="kv" id="kv-eq5">—</div></div>
+  <div class="kpi" id="kpi-eq6"><div class="kt">EQ6 — 218924019 = 112322200</div><div class="kv" id="kv-eq6">—</div></div>
+</div>
+
+<div class="card">
+  <div class="card-hd">
+    <h2>Saldos por UG &middot; Mês</h2>
+    <div style="display:flex;align-items:center;gap:16px">
+      <span id="ttitle">—</span>
+      <div class="pg-row">
+        <button class="pg-btn" onclick="mudarPg(-1)">&#8592;</button>
+        <span id="pg-info">—</span>
+        <button class="pg-btn" onclick="mudarPg(1)">&#8594;</button>
+      </div>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table>
+      <thead><tr>
+        <th style="width:28px"></th>
+        <th class="left" style="min-width:220px" onclick="sortBy('UG')">UG <span id="s_UG" class="si">&#8645;</span></th>
+        <th style="width:110px" onclick="sortBy('ATIVO')">Ativo <span id="s_ATIVO" class="si">&#8645;</span></th>
+        <th style="width:110px" onclick="sortBy('PASSIVO')">Passivo <span id="s_PASSIVO" class="si">&#8645;</span></th>
+        <th style="width:200px" onclick="sortBy('DIV')">Diverg&#234;ncia <span id="s_DIV" class="si">&#8645;</span></th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+      <tfoot><tr id="tfoot-row"><td class="left" colspan="5">&#8212;</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+
+<script>
+const EQUACOES=[{"id": "EQ1", "desc": "21142XXXX = 113620101 + 113620103", "passivo_exact": [], "passivo_prefix": "21142", "ativo": [113620101, 113620103]}, {"id": "EQ2", "desc": "218820101 = 113620102 + 113620104", "passivo_exact": [218820101], "passivo_prefix": null, "ativo": [113620102, 113620104]}, {"id": "EQ3", "desc": "218820104 = 112120101", "passivo_exact": [218820104], "passivo_prefix": null, "ativo": [112120101]}, {"id": "EQ4", "desc": "218820107 = 112120104", "passivo_exact": [218820107], "passivo_prefix": null, "ativo": [112120104]}, {"id": "EQ5", "desc": "218820108 = 112120107", "passivo_exact": [218820108], "passivo_prefix": null, "ativo": [112120107]}, {"id": "EQ6", "desc": "218924019 = 112322200", "passivo_exact": [218924019], "passivo_prefix": null, "ativo": [112322200]}];
+const UG_NAMES={"440906": "FUNDO ANTIDROGAS DO DISTRITO FEDERAL - FUNPAD", "320204": "FUNDO CAPITALIZADO DE PREVIDÊNCIA DO DF", "130910": "FUNDO DA PREVIDÊNCIA", "120901": "FUNDO DA PROCURADORIA DO DISTRITO FEDERAL", "130911": "FUNDO DA RECEITA TRIBUTÁRIA DO DF - PRÓ-RECEITA", "180904": "FUNDO DA UNIVERSIDADE DO DISTRITO FEDERAL -FUNDF", "440905": "FUNDO DE APAR DA DEFENSORIA PÚBLICA DO DF - PRODEF", "340902": "FUNDO DE APOIO AO ESPORTE", "160905": "FUNDO DE APOIO AO ESPORTE DO DISTRITO FEDERAL", "160902": "FUNDO DE APOIO AO PROG. PERM. ALF. JOV. ADULT", "230903": "FUNDO DE APOIO À CULTURA - FAC", "400901": "FUNDO DE APOIO À PESQUISA DO DISTRITO FEDERAL", "130912": "FUNDO DE APRIMORAMENTO DO CONTROLE INTERNO DO DF", "180902": "FUNDO DE ASSISTÊNCIA SOCIAL DO DISTRITO FEDERAL", "10901": "FUNDO DE ASSISTÊNCIA À SAÚDE DA CLDF.", "210901": "FUNDO DE AVAL DO DISTRITO FEDERAL", "180906": "FUNDO DE COMBATE E ERRADICAÇÃO DA POBREZA", "110903": "FUNDO DE DEFESA DOS DIREITOS DO CONSUMIDOR", "130901": "FUNDO DE DESENV. DO DISTRITO FEDERAL - FUNDEFE", "280901": "FUNDO DE DESENV. URBANO DO DISTRITO FEDERAL", "210902": "FUNDO DE DESENVOLV. RURAL DO DISTRITO FEDERAL", "240901": "FUNDO DE FOMENTO À IND. DO TURISMO DO DF - FITUR", "240904": "FUNDO DE FOMENTO À INDÚSTRIA DO TURISMO DO DF", "130904": "FUNDO DE LIQUIDEZ DO METRÔ DF", "160903": "FUNDO DE MANUT. E DESENV. DA EDUCAÇÃO BÁSICA", "430901": "FUNDO DE MELH. DA GESTÃO DOS PARQUES DO DF", "140905": "FUNDO DE MELHORIA DA GESTÃO PÚBLICA - PRÓ-GESTÃO", "220906": "FUNDO DE MOD., MANUT. E REEQ. DA PCDF - FUNPCDF", "220905": "FUNDO DE MOD., MANUT. E REEQ. DO CBMDF - FUNCBM", "220904": "FUNDO DE MOD., MANUTENÇÃO E REEQ. DA PMDF - FUNPM", "130902": "FUNDO DE MODERNIZAÇÃO E REAPAR. DA ADM. FAZENDÁRIA", "340901": "FUNDO DE PROM. AO ESP. EDUC. FISICA E LAZER", "220901": "FUNDO DE SAÚDE DA POLÍCIA MILITAR", "220902": "FUNDO DE SAÚDE DO CORPO DE BOMBEIROS", "170901": "FUNDO DE SAÚDE DO DISTRITO FEDERAL", "220909": "FUNDO DE SEGURANÇA PÚBLICA DO DISTRITO FEDERAL -", "250901": "FUNDO DE SOLIDARIEDADE PARA GER. DE EMP. E RENDA", "200902": "FUNDO DE TRANSPORTE PÚBLICO COLETIVO DO DF", "220907": "FUNDO DE TRÂNSITO DO DISTRITO FEDERAL - FTDF", "450901": "FUNDO DISTRITAL DE COMBATE À CORRUPÇÃO (FDCC)", "210904": "FUNDO DISTRITAL DE DESENVOLVIMENTO RURAL - FDR", "280905": "FUNDO DISTRITAL DE HAB. DE INTERESSE SOCIAL", "210903": "FUNDO DISTRITAL DE SANIDADE ANIMAL", "110901": "FUNDO DO DIREITO DA CRIANCA E DO ADOLESCENTE", "250907": "FUNDO DO TRABALHO DO DISTRITO FEDERAL - FTDF", "110904": "FUNDO DOS DIREITOS DO IDOSO DO DF - FDI/DF", "320203": "FUNDO FINANCEIRO DE PREVIDÊNCIA DO DF", "110905": "FUNDO GARANTIDOR DE PARCERIAS PÚBLICO-PRIVADAS-DF", "180901": "FUNDO HABITACIONAL DO DISTRITO FEDERAL", "630901": "FUNDO MODER, MANUT E REAPAR ATIV. URBANA- FUNDAFAU", "250902": "FUNDO P/A GERAÇÃO DE EMP. E RENDA DO DF - FUNGER", "110902": "FUNDO P/PREV. CONT. E TRAT. DEPEN. QUIM. DO DF", "220908": "FUNDO PENITENCIÁRIO DO DF - FUNPDF", "320202": "FUNDO SOLIDÁRIO GARANTIDOR DE PREVIDÊNCIA DO DF", "150901": "FUNDO ÚNICO DE MEIO AMBIENTE DO DISTRITO FEDERAL", "100101": "GABINETE DO VICE-GOVERNADOR DO DISTRITO FEDERAL", "800001": "GRUPO DE APOIO SIGGO", "170120": "HOSPITAL DE APOIO DE BRASÍLIA - HAB", "170118": "HOSPITAL DE BASE DO DISTRITO FEDERAL - HBDF", "170119": "HOSPITAL SÃO VICENTE DE PAULA - HSVP", "140202": "INSTITUTO DE ASSIST. À SAÚDE DOS SERV. DO DF-INAS", "440201": "INSTITUTO DE DEFESA DO CONSUMIDOR DO DF", "440202": "INSTITUTO DE DEFESA DO CONSUMIDOR DO DF", "180202": "INSTITUTO DE DESENVOLVIMENTO HABITACIONAL/DF", "150203": "INSTITUTO DE ECOLOGIA E MEIO AMBIENTE", "280208": "INSTITUTO DE MEIO AMBIENTE E REC. HÍDRICOS DO DF", "190219": "INSTITUTO DE PESQUISA E ESTATÍSTICA DO DF", "190205": "INSTITUTO DE PLANEJ. TERRITORIAL URBANO DO DF", "320201": "INSTITUTO DE PREVIDÊNCIA DOS SERVIDORES DO DF", "170103": "INSTITUTO DE SAUDE DO DISTRITO FEDERAL", "170123": "INSTITUTO DE SAÚDE MENTAL - ISM", "150106": "JARDIM BOTÂNICO DE BRASÍLIA", "240204": "JUNTA COMERCIAL, INDUSTRIAL E SERVIÇOS DO DF", "170122": "LABORATÓRIO CENTRAL DO DISTRITO FEDERAL - LACEN DF", "130889": "MINISTÉRIO PÚBLICO DO DF E TERRITÓRIOS", "320206": "NOVO FUNDO CAPITALIZADO DE PREVIDÊNCIA DO DF", "220106": "PMDF - DEPARTAMENTO DE GESTÃO DE PESSOAL (DGP)", "220105": "POLÍCIA CIVIL DO DISTRITO FEDERAL - PCDF", "220103": "POLÍCIA MILITAR DO DISTRITO FEDERAL - PMDF", "120101": "PROCURADORIA - GERAL DO DISTRITO FEDERAL", "190135": "REGIÃO ADMINISTRATIVA DO SOL NASCENTE - RA XXXII", "900101": "RESERVA DE CONTINGENCIA", "190134": "Região Administrativa de Arniqueira - RA XXXIII", "400101": "SEC DE EST DE CIÊNCIA, TECNOLOGIA E INOVAÇÃO DO DF", "530101": "SEC. DE EST. DE MICRO E PEQ. EMP. E ECON. SOL. DF", "110102": "SEC. DE ESTADO DE CAPTAÇÃO DE REC. FINANCEIROS", "240101": "SEC. DE ESTADO DE DESENVOLVIMENTO ECONÔMICO DO DF", "630101": "SEC. DE ESTADO PROT. ORDEM URBANÍSTICA - DF LEGAL", "510101": "SEC. DE POLÍTICAS P/CRIANÇAS, ADOLESC. E JUVENTUDE", "130102": "SECR. DE EST. DE ECONOMIA DO DF - GABINETE", "130101": "SECR. DE ESTADO DE ECONOMIA DO DF", "666666": "SECR. DE ESTADO DE ECONOMIA DO DF", "250101": "SECR. EST. DESENV. ECON., TRABALHO E RENDA DO DF", "690101": "SECR. EXTRAORDINÁRIA DA PESSOA COM DEFICIÊNCIA", "260101": "SECRETARIA  DE ESTADO DE COMUNICAÇÃO DO DISTRITO F", "210101": "SECRETARIA DE AGRIC. ABASTECIMENTO E DESENV RURAL", "180101": "SECRETARIA DE DESENVOLVIMENTO SOCIAL DO DF", "220101": "SECRETARIA DE EST. DE  SEGURANÇA PÚBLICA DO DF", "230101": "SECRETARIA DE EST. DE CULTURA E ECON. CRIAT. DO DF", "520101": "SECRETARIA DE EST. DE DEFESA CIVIL DO DF", "280101": "SECRETARIA DE EST. DE DESENV. URB. E HABIT. DO DF", "440101": "SECRETARIA DE EST. DE JUSTIÇA E CIDADANIA DO DF", "550101": "SECRETARIA DE EST. DE REGUL. DE CONDOMÍNIOS DO DF", "310101": "SECRETARIA DE EST. DE TURISMO DO DISTRITO FEDERAL", "200101": "SECRETARIA DE EST.DE TRANSPORTE E MOBILIDADE DO DF", "670101": "SECRETARIA DE ESTADO DA FAMÍLIA E JUVENTUDE DO DF", "570101": "SECRETARIA DE ESTADO DA MULHER DO DISTRITO FEDERAL", "640101": "SECRETARIA DE ESTADO DE ADM. PENITENCIÁRIA DO DF", "610101": "SECRETARIA DE ESTADO DE ATEND. À COMUNIDADE DO DF", "650101": "SECRETARIA DE ESTADO DE CIÊNCIA, TECNOLOGIA E INOV", "160101": "SECRETARIA DE ESTADO DE EDUCAÇÃO DO DF", "660101": "SECRETARIA DE ESTADO DE EMPREENDEDORISMO DO DF", "340101": "SECRETARIA DE ESTADO DE ESPORTE E LAZER DO DF", "110101": "SECRETARIA DE ESTADO DE GOVERNO DO DISTRITO FEDERA", "190101": "SECRETARIA DE ESTADO DE OBRAS E INFRAEST. DO DF", "680101": "SECRETARIA DE ESTADO DE PROJETOS ESPECIAIS", "170101": "SECRETARIA DE ESTADO DE SAÚDE DO DISTRITO FEDERAL", "330101": "SECRETARIA DE ESTADO DE SOLIDARIEDADE", "150101": "SECRETARIA DE ESTADO DO MEIO AMBIENTE", "700101": "SECRETARIA DE GOVERNANÇA DIGITAL E INTEGRAÇÃO", "190301": "SECRETARIA ESTADO DE OBRAS E INFRAEST. DO DF – CIP", "70101": "SECRETARIA EXTRAORDINÁRIA DE PROTEÇÃO ANIMAL", "150205": "SERVIÇO DE LIMPEZA URBANA DO DISTRITO FEDERAL- SLU", "130103": "SEÇÃO DE ORÇAMENTO DA SEEC", "200201": "SOCIED. DE TRANSP. COLETIVOS DE BRASILIA - TCB", "320205": "SOCIEDADE DE ABASTECIMENTO DE BRASÍLIA - SAB", "130994": "SUB DE PLANEJAMENTO GOVERNAMENTAL - SUPLAN", "130995": "SUB TECNOLOGIA DA INFORMAÇÃO E COMUNICAÇÃO - SUTIC", "130107": "SUB. COORDENAÇÃO DAS ESTATAIS E ÓRGÃOS COLEGIADOS", "130105": "SUBSECRETARIA DA RECEITA - SUREC", "130110": "SUBSECRETARIA DE ACOMPANHAMENTO DA POLÍTICA FISCAL", "130108": "SUBSECRETARIA DE CAPTAÇÃO DE RECURSOS - SUCAP", "130104": "SUBSECRETARIA DE CONTABILIDADE - SUCON", "130993": "SUBSECRETARIA DE GESTÃO DE EMENDAS PARLAMENTARES -", "130998": "SUBSECRETARIA DE ORÇAMENTO", "200203": "TRANSPORTE URBANO DO DISTRITO FEDERAL - DFTRANS", "200205": "TRANSPORTE URBANO DO DISTRITO FEDERAL - DFTRANS", "20101": "TRIBUNAL DE CONTAS DO DISTRITO FEDERAL", "130999": "UNIDADE DE GERENCIAMENTO DO SISTEMA", "130888": "UNIDADE DE GERENCIAMENTO PUBLICO", "180203": "UNIVERSIDADE DO DISTRITO FEDERAL - UNDF", "190127": "ADMINISTRAÇÃO REGIONAL  SETOR COMPL. IND. E ABAST.", "190121": "ADMINISTRAÇÃO REGIONAL DA CANDANGOLÂNDIA", "190133": "ADMINISTRAÇÃO REGIONAL DA FERCAL - RA XXXI", "190106": "ADMINISTRAÇÃO REGIONAL DE  BRAZLANDIA", "190137": "ADMINISTRAÇÃO REGIONAL DE ARAPOANGA - RA XXXIV", "190111": "ADMINISTRAÇÃO REGIONAL DE CEILÂNDIA", "190108": "ADMINISTRAÇÃO REGIONAL DE PLANALTINA", "190114": "ADMINISTRAÇÃO REGIONAL DE SAMAMBAIA", "190115": "ADMINISTRAÇÃO REGIONAL DE SANTA MARIA", "190107": "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO", "190128": "ADMINISTRAÇÃO REGIONAL DE SOBRADINHO II", "190116": "ADMINISTRAÇÃO REGIONAL DE SÃO SEBASTIÃO", "190105": "ADMINISTRAÇÃO REGIONAL DE TAGUATINGA", "190132": "ADMINISTRAÇÃO REGIONAL DE VICENTE PIRES", "190136": "ADMINISTRAÇÃO REGIONAL DE ÁGUA QUENTE - RA XXXV", "190122": "ADMINISTRAÇÃO REGIONAL DE ÁGUAS CLARAS", "190110": "ADMINISTRAÇÃO REGIONAL DO  NÚCLEO BANDEIRANTE", "190113": "ADMINISTRAÇÃO REGIONAL DO CRUZEIRO", "190104": "ADMINISTRAÇÃO REGIONAL DO GAMA", "190112": "ADMINISTRAÇÃO REGIONAL DO GUARÁ", "190130": "ADMINISTRAÇÃO REGIONAL DO ITAPOÃ", "190129": "ADMINISTRAÇÃO REGIONAL DO JARDIM BOTÂNICO", "190120": "ADMINISTRAÇÃO REGIONAL DO LAGO NORTE", "190118": "ADMINISTRAÇÃO REGIONAL DO LAGO SUL", "190109": "ADMINISTRAÇÃO REGIONAL DO PARANOÁ", "190126": "ADMINISTRAÇÃO REGIONAL DO PARK WAY", "190103": "ADMINISTRAÇÃO REGIONAL DO PLANO PILOTO", "190117": "ADMINISTRAÇÃO REGIONAL DO RECANTO DAS EMAS", "190119": "ADMINISTRAÇÃO REGIONAL DO RIACHO FUNDO", "190123": "ADMINISTRAÇÃO REGIONAL DO RIACHO FUNDO II", "190124": "ADMINISTRAÇÃO REGIONAL DO SUDOESTE/OCTOGONAL", "190125": "ADMINISTRAÇÃO REGIONAL DO VARJÃO", "190131": "ADMINISTRAÇÃO REGIONAL SETOR IND. E ABASTECIMENTO", "150206": "AG. REG. DE ÁGUAS E SAN. BÁSICO DO DF - ADASA", "110201": "AGÊNCIA DE FISCALIZAÇÃO DO DISTRITO FEDERAL-AGEFIS", "230103": "ARQUIVO PÚBLICO DO DISTRITO FEDERAL", "130202": "BANCO DE BRASÍLIA S/A - BRB", "190215": "BIOTIC S/S", "130207": "BRB ADMINISTRADORA E CORRETORA DE SEGUROS S/A", "130204": "BRB CRÉDITO, FINANCIAMENTO E INVESTIMENTO S/A", "130205": "BRB DISTRIB. DE TÍTULOS E VAL. MOBILIÁRIOS S/A", "130208": "BRB SERVICOS S/A", "130209": "BSB PARTICIPAÇÕES S/A", "190214": "CAESB PARTICIPAÇÕES S. A - CAESBPAR", "130206": "CARTÃO BRB S/A", "90101": "CASA CIVIL DO DISTRITO FEDERAL", "580101": "CASA MILITAR DA GOVERNADORIA DO DISTRITO FEDERAL", "190211": "CEB DISTRIBUIÇÃO S.A", "190212": "CEB GERAÇÃO S.A", "190216": "CEB ILUMINACAO PUBLICA E SERVICOS S.A.", "190209": "CEB LAJEADO S/A", "190213": "CEB PARTICIPAÇÕES S.A - CEBPAR", "210202": "CENTRAL DE ABASTECIMENTO DE BRASÍLIA - CEASA", "170121": "CENTRO DE ORIENT. MÉD.-PSICO-PEDAGÓGICO - COMPP", "190210": "COMPANHIA BRASILIENSE DE GÁS - CEBGÁS", "280209": "COMPANHIA DE DESENV. DA HABITAÇÃO  DO DF - CODHAB", "130201": "COMPANHIA DE PLANEJ. DO DISTRITO FEDERAL-CODEPLAN", "190202": "COMPANHIA DE SANEAMENTO AMBIENTAL DO DF - CAESB", "190206": "COMPANHIA DE SANEAMENTO AMBIENTAL DO DF - CAESB", "200204": "COMPANHIA DO METROPOLITANO DO DF - METRÔ-DF", "190204": "COMPANHIA ENERGÉTICA DE BRASÍLIA - CEB", "190208": "COMPANHIA ENERGÉTICA DE BRASÍLIA/CEB", "190203": "COMPANHIA IMOBILIARIA DE BRASILIA - TERRACAP", "190201": "COMPANHIA URB. DA NOVA CAPITAL DO BRASIL-NOVACAP", "130996": "CONSELHO DE TRANSPARÊNCIA E CONTROLE SOCIAL - DF", "590202": "CONSÓRCIO PÚBLICO DE MANEJO DAS ÁGUAS  CORSAP-DF/G", "450101": "CONTROLADORIA GERAL DO DISTRITO FEDERAL", "220104": "CORPO DE BOMB. MILITAR DO DISTRITO FEDERAL - CBMDF", "130106": "CORREGEDORIA FAZENDÁRIA - COFAZ", "130997": "CÂMARA DE GOVERNANÇA ORÇAMENTÁRIA DO - DF", "10101": "CÂMARA LEGISLATIVA DO DISTRITO FEDERAL", "480101": "DEFENSORIA PÚBLICA DO DISTRITO FEDERAL", "220107": "DEPARTAMENTO DE ADM GERAL DA POLÍCIA CIVIL DO DF", "220201": "DEPARTAMENTO DE TRÂNSITO DO DF - DETRAN-DF", "200202": "DEPTO DE ESTRADAS E RODAGEM DO DF - DER/DF", "130210": "DF - GESTÃO DE ATIVOS S.A.", "170113": "DIR. GERAL DE SAÚDE DO NB, CAND. R. FUND. E P. WAY", "170104": "DIRETORIA GERAL DE SAÚDE DA ASA NORTE", "170102": "DIRETORIA GERAL DE SAÚDE DA ASA SUL", "170110": "DIRETORIA GERAL DE SAÚDE DE BRAZLÂNDIA", "170108": "DIRETORIA GERAL DE SAÚDE DE CEILÂNDIA", "170106": "DIRETORIA GERAL DE SAÚDE DE PLANALTINA", "170114": "DIRETORIA GERAL DE SAÚDE DE SAMAMBAIA", "170117": "DIRETORIA GERAL DE SAÚDE DE SANTA MARIA", "170105": "DIRETORIA GERAL DE SAÚDE DE SOBRADINHO", "170116": "DIRETORIA GERAL DE SAÚDE DE SÃO SEBASTIÃO", "170107": "DIRETORIA GERAL DE SAÚDE DE TAGUATINGA", "170109": "DIRETORIA GERAL DE SAÚDE DO GAMA", "170112": "DIRETORIA GERAL DE SAÚDE DO GUARÁ", "170111": "DIRETORIA GERAL DE SAÚDE DO PARANOÁ", "170115": "DIRETORIA GERAL DE SAÚDE DO RECANTO DAS EMAS", "210203": "EMPRESA DE ASSIST. TÉC. E EXT. RURAL DO DF-EMATER", "190220": "EMPRESA DE REGULARIZAÇÃO DE TERRAS RURAIS -ETR S.A", "210205": "FLORESTAMENTO E REFLORESTAMENTO S/A", "230201": "FUNDACAO CULTURAL DO DF", "160201": "FUNDACAO EDUCACIONAL DO DISTRITO FEDERAL", "210201": "FUNDACAO ZOOBOTANICA DO DISTRITO FEDERAL", "160202": "FUNDAÇÃO  UNIVERSIDADE ABERTA DO DF - FUNAB", "10202": "FUNDAÇÃO CÂMARA LEGISLATIVA DO DF - FUNCAL", "220202": "FUNDAÇÃO DE AMPARO AO TRABALHADOR PRESO - FUNAP", "150201": "FUNDAÇÃO DE APOIO A PESQUISA DO DF - FAP", "170203": "FUNDAÇÃO DE ENS. E PESQ. EM CIÊNC. DA SAÚDE-FEPECS", "180201": "FUNDAÇÃO DO SERVIÇO SOCIAL DO DIST. FEDERAL", "170202": "FUNDAÇÃO HEMOCENTRO DE BRASÍLIA - FHB", "170201": "FUNDAÇÃO HOSPITALAR DO DISTRITO FEDERAL", "150204": "FUNDAÇÃO JARDIM ZOOLÓGICO DE BRASÍLIA"};
+const GESTAO_NAMES={"20901": "FUNDO DE TRANSPORTE PUBLICO COLETIVO DO DF", "22901": "FUNDO DE SAUDE DA POLICIA MILITAR", "22902": "FUNDO DE SAUDE DO CORPO DE BOMBEIROS", "23901": "FUNDO DE CULTURA DO DISTRITO FEDERAL", "16201": "FUNDACAO EDUCACIONAL DO DISTRITO FEDERAL", "18201": "FUNDACAO DO SERVICO SOCIAL", "20202": "DEPARTAMENTO DE ESTRADAS DE RODAGEM DO DF", "20203": "DFTRANS - TRANSPORTE URBANO DO DISTRITO FEDERAL", "21201": "FUNDACAO ZOOBOTANICA DO DISTRITO FEDERAL", "22201": "DEPARTAMENTO DE TRANSITO DO DF", "22202": "FUNDACAO DE AMPARO AO TRABALHOR PRESO", "23201": "FUNDACAO CULTURAL DO DISTRITO FEDERAL", "1901": "FUNDO DE ASSISTENCIA A SAUDE CLDF", "23902": "FUNDO DE PROMOCAO AO ESP.EDUCACAO FIS.E LAZER", "17201": "FUNDACAO HOSPITALAR DO DISTRITO FEDERAL", "25901": "FUNDO DE SOLIDARIEDADE PARA GER. DE EMP. E RENDA", "27901": "FUNDO DE APOIO A ARTE E A CULTURA", "27902": "FUNDO DE PROM. AO ESPORTE, EDUC. FIS. E LAZER", "27201": "FUNDACAO CULTURAL DO DISTRITO FEDERAL", "21901": "FUNDO DE AVAL DO DISTRITO FEDERAL", "11901": "FUNDO DOS DIR DA CRIANCA E DO ADOLESCENTE", "19903": "FUNDO DE FINANCIAMENTO DE HABITACAO POPULAR", "15201": "FUNDACAO DE APOIO A PESQUISA DO DF", "17202": "FUNDACAO HEMOCENTRO", "15203": "IEMA", "15205": "SERVIÇO DE LIMPEZA URBANA - SLU", "18202": "INSTITUTO DE DESENVOLVIMENTO_HABITACIONAL/DF", "13201": "COMPANHIA DE PLANEJAMENTO DO DISTRITO FEDERAL", "13202": "BANCO DE BRASILIA S/A", "19201": "COMPANHIA URBANIZADORA DA NOVA CAPITAL", "19202": "COMPANHIA DE SANEAMENTO AMBIENTAL DO DF - CAESB", "19203": "COMPANHIA IMOBILIARIA DE BRASILIA", "19204": "COMPANHIA ENERGETICA DE BRASILIA", "20201": "SOCIEDADE DE TRANSPORTE COLETIVOS DE BRASILIA", "20204": "COMPANHIA DO METROPOL. DO DISTRITO FEDERAL", "21202": "CENTRAIS DE ABASTECIMENTO DO DISTRITO FEDERAL", "21203": "EMPRESA DE ASSIST. TEC. E EXTENSAO RURAL", "21204": "SOCIEDADE DE ABASTECIMENTO DE BRASILIA", "21205": "FLORESTAMENTO E REFLORESTAMENTO S/A", "18902": "FUNDO DE ASSIST. SOCIAL DO DISTRITO FEDERAL", "17901": "FUNDO DE SAUDE DO DISTRITO FEDERAL", "16202": "FUNDO UNIVERSIDADE ABERTA DO DISTRITO FEDERAL", "13904": "FUNDO DE LIQUIDEZ DO METRO DF", "11902": "FUNDO P/PREV. CONTR. E TRAT. DEPEND. QUIM. DF", "22903": "FUNDO DE REEQ. DOS ORG. INT. DA SEG. PUBLICA", "28901": "FUNDO DE DESENVOLVIMENTO URBANO DO DF", "16902": "FUNDO DE APOIO AO PROG. ALFAB. JOVENS ADULTOS", "16901": "FUNDO DE MAN. DE ENS. FUND. E VAL. MAGISTERIO", "15204": "FUNDAÇÃO ZOOLÓGICO DE BRASÍLIA", "11903": "FUNDO DE DEFESA DOS DIREITOS DO CONSUMIDOR", "11904": "FUNDO DE APOIO E ASSISTÊNCIA AO IDOSO", "34901": "FUNDO DE PROMOCAO AO ESP.EDUCACAO FIS.E LAZER", "16903": "FUNDO DE MANUT. E DESENV. DA EDUCAÇÃO BÁSICA", "23903": "FUNDO DE APOIO À CULTURA - FAC", "19207": "COORDENADORIA DO METRÔ", "33901": "FUNDO DE SOLID. PARA GERAÇÃO DE EMPREGO E RENDA", "11202": "AGÊNCIA DE DESENV. DO TURISMO DO DISTRITO FEDERAL", "12901": "FUNDO DA PROCURADORIA GERAL DO DF", "19219": "INSTITUTO DE PESQUISA E ESTATÍSTICA DO DF", "19220": "EMPRESA DE REGULARIZACAO DE TERRAS RURAIS -ETR S.A", "85001": "IGES-DF", "23204": "INSTITUTO DE GESTÃO ESTRATÉGICA DE SAÚDE DO DF", "17203": "FUNDAÇÃO DE ENSINO E PESQUISA EM CIÊNCIAS DA SAÚDE", "21902": "FUNDO DE DESENVOLV. RURAL DO DISTRITO FEDERAL", "14905": "FUNDO DE MELHORIA DA GESTÃO PÚBLICA - PRO-GESTÃO", "19210": "COMPANHIA BRASILIENSE DE GÁS - CEBGÁS", "13204": "BRB CRÉDITO, FINANCIAMENTO E INVESTIMENTO S/A", "13205": "BRB DISTRIB. DE TÍT. E VALORES MOBILIÁRIOS S/A", "19206": "CAMPANHIA DE SANEAMENTO DO DISTRITO FEDERAL", "19208": "COMPANHIA ENERGÉTICA DE BRASÍLIA", "19209": "CEB LAJEADO S/A", "43901": "FUNDO DE MELH. DA GESTÃO DE PARQUES DO DF", "15206": "AG. REG. DE ÁGUAS, ENERG. E SAN. BÁS.DO DF - ADASA", "25902": "FUNDO PARA A GERAÇÃO DE EMP E RENDA DO DF - FUNGER", "40901": "FUNDO DE APOIO À PESQUISA DO DISTRITO FEDERAL", "19211": "CEB DISTRIBUIÇÃO S.A", "19212": "CEB GERAÇÃO S.A", "19213": "CEB PARTICIPAÇÕES S.A - CEBPAR", "14202": "INSTITUTO DE ASSIST. À SAÚDE DOS SERV. DO DF", "34902": "FUNDO DE APOIO AO ESPORTE", "1202": "FUNDAÇÃO CÂMARA LEGISLATIVA DO DF - FUNCAL", "44201": "INSTITUTO DE DEFESA DO CONSUMIDOR DO DF", "28208": "INSTITUTO DO MEIO AMB. E REC. HÍDRICOS DO DF", "19214": "CAESB PARTICIPAÇÕES S.A - CAESBPAR", "22904": "FUNDO DE MOD., MANUTENÇÃO E REEQ. DA PMDF - FUNPM", "22905": "FUNDO DE MOD., MANUT. E REEQ. DO CBMDF - FUNCBM", "22906": "FUNDO DE MOD., MANUT. E REEQ DA PCDF - FUNPCDF", "22907": "FUNDO DE TRANSITO DO DISTRITO FEDERAL - FTDF", "28209": "COMPANHIA DE DESENV. HABITACIONAL DO DF - CODHAB", "44905": "FUNDO DE APOIO E APARL. DO CENTº DE ASSIST. JUD.", "21903": "FUNDO DISTRITAL DE SANIDADE ANIMAL", "32203": "INSTITUTO DE PREV. DOS SERVIDORES DO DF - IPREV/DF", "28905": "FUNDO DISTRITAL DE HAB. E INTERESSE SOCIAL", "32204": "FUNDO PREVIDENCIÁRIO - DFPREV", "22908": "FUNDO PENITENCIÁRIO DO DF - FUNPDF", "44906": "FUNDO ANTIDROGAS DO DISTRITO FEDERAL - FUNPAD", "20902": "FUNDO DE TRANSPORTE PUBLICO COLETIVO DO DF", "18906": "FUNDO DE COMBATE E ERRADICAÇÃO DE POBREZA", "13206": "CARTÃO BRB S/A", "13207": "BRB ADMINISTRADORA E CORRETORA DE SGUROS S/A", "13208": "BSB ADMINISTRADORA DE ATIVOS S/A", "13209": "BSB PARTICIPACÕES S/A", "11905": "FUNDO GARANTIDOR DE PARCERIAS PÚBLICO-PRIVADAS-DF", "27000": "COORDENADORIA DE INTEGRA DAS AÇÕES SOCIAIS - CIAS", "13210": "DF - GESTÃO DE ATIVOS S.A.", "20905": "FUNDO DE TRANSPORTE PUBLICO COLETIVO DO DF", "13911": "FUNDO DA RECEITA TRIBUTÁRIA DO DF - PRÓ-RECEITA", "44202": "INSTITUTO DE DEFESA DO CONSUMIDOR DO DF", "59000": "SECRETARIA DE ESTADO DAS CIDADES DO DISTRITO FEDER", "24904": "FUNDO DE FOMENTO À INDÚSTRIA DO TURISMO NO - DF", "22909": " FUNDO DE SEGURANÇA PÚBLICA DO DISTRITO FEDERAL -", "25907": "FUNDO DO TRABALHO DO DISTRITO FEDERAL - FTDF", "21904": "Fundo Distrital de Desenvolvimento Rural ¿ FDR", "63901": "FUNDO MODER, MANUT E REAPAR ATIV URBANAS -FUNDAFAU", "18904": "FUNDO DA UNIVERSIDADE DO DISTRITO FEDERAL - FUND", "45901": "FUNDO DISTRITAL DE COMBATE À CORRUPÇÃO (FDCC)", "13912": "FUNDO DE APRIMORAMENTO DO CONTROLE INTERNO DO DF", "18203": "UNIVERSIDADE DO DISTRITO FEDERAL - UnDF", "19216": "CEB ILUMINACAO PUBLICA E SERVICOS S.A.", "24204": "JUNTA COMERCIAL, INDUSTRIAL E SERVIÇOS DO DF", "59202": "CONSÓRCIO PÚBLICO DE MANEJO DAS ÁGUAS CORSAP-DF/GO", "32202": "FUNDO SOLIDÁRIO GARANTIDOR - IPREV DF", "19215": "BIOTIC S/A", "23904": "FUNDO DE POLÍTICA CULTURAL - FPC", "16905": "FUNDO DE APOIO AO ESPORTE DO DISTRITO FEDERAL", "32901": "FUNDO DE MELHORIA DA GESTÃO PÚBLICA - PRÓ - GESTÃO", "25904": "FUNDO DE ASSISTÊNCIA SOCIAL DO DISTITO FEDERAL", "25905": "FUNDO DE APOIO E ASSISTÊNCIA AO IDOSO DO - DF", "25906": "FUNDO DE COMBATE E ERRADICAÇÃO DA POBREZA", "32205": "SOCIEDADE DE ABASTECIMENTO DE BRASÍLIA S/A - SAB", "11201": "AGÊNCIA DE FISCALIZAÇÃO DO DISTRITO FEDERAL", "1": "TESOURO", "24901": "FUNDO DE FOMENTO À IND. DO TURISMO DO DF - FITUR", "13901": "FUNDO DE DESENVOLVIMENTO DO DISTRITO FEDERAL", "13902": "FUNDO DE MODERNIZAÇÃO E REAPAR. DA ADM. FAZENDÁRIA", "13903": "FUNDO DE FINANCIAMENTO DE HABITACAO POPULAR", "15901": "FUNDO UNICO DE MEIO AMB. DO DISTRITO FEDERAL", "18901": "FUNDO HABITACIONAL DO DISTRITO FEDERAL"};
+const CONTA_NAMES={"112120101": "IMPOSTO SOBRE A RENDA E PROVENTOS DE QUALQUER NATUREZA", "112120104": "ICMS", "112120107": "ISS", "112322200": "RECURSOS A RECEBER - DREM", "113620101": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM CAPITALIZAÇÃO", "113620102": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "113620103": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM REPARTIÇÃO", "113620104": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "218820101": "RPPS - RETENÇÕES SOBRE VENCIMENTOS E VANTAGENS", "218820104": "IMPOSTO SOBRE A RENDA RETIDO NA FONTE - IRRF", "218820107": "ICMS", "218820108": "ISS", "218924019": "RECURSOS A DEVOLVER - DREM"};
+const MESES_PT={1:'Jan',2:'Fev',3:'Mar',4:'Abr',5:'Mai',6:'Jun',7:'Jul',8:'Ago',9:'Set',10:'Out',11:'Nov',12:'Dez'};
+
+function decomp(b64){
+  const bin=atob(b64),buf=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);
+  const ds=new DecompressionStream('gzip');
+  const w=ds.writable.getWriter();w.write(buf);w.close();
+  return new Response(ds.readable).text();
+}
+
+decomp('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').then(txt=>{
+  const p=JSON.parse(txt);
+  const cols=p.cols;
+  window.ALL=p.rows.map(r=>Object.fromEntries(cols.map((k,i)=>[k,r[i]])));
+  init();
+});
+
+function n(v){return v==null||v===''?0:+v||0;}
+function brl(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);}
+function vc(v){return Math.abs(v)<0.005?'vz':v<0?'vn':'vp';}
+function fmtG(g){return g==null?'':String(g).padStart(5,'0');}
+
+function isAtivo(acct){return String(acct).charAt(0)==='1';}
+function isPassivo(acct){return String(acct).charAt(0)==='2';}
+function prefixMatch(acct,pfx){return pfx&&String(acct).startsWith(pfx);}
+function passivoEq(eq,byAcct){
+  let s=0;
+  if(eq.passivo_prefix){for(const[k,v]of Object.entries(byAcct)){if(prefixMatch(k,eq.passivo_prefix))s+=v;}}
+  if(eq.passivo_exact){for(const c of eq.passivo_exact)s+=byAcct[String(c)]||0;}
+  return s;
+}
+
+const PG_SZ=50;
+let pg=1,sortCol='UG',sortDir=1,filterMode='',ugSel='',mesSel='',gestSel='';
+let filDocs=[];
+
+function init(){
+  document.getElementById('loading').classList.remove('show');
+  const meses=[...new Set(window.ALL.map(r=>n(r.INMES)))].sort((a,b)=>a-b);
+  const fm=document.getElementById('fmes');
+  meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent='Até '+(MESES_PT[m]||m);fm.appendChild(o);});
+  const gestoes=[...new Set(window.ALL.map(r=>String(r.COGESTAO||'')))].sort();
+  const fg=document.getElementById('fgest');
+  gestoes.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=fmtG(g)+(GESTAO_NAMES[g]?' — '+GESTAO_NAMES[g]:'');fg.appendChild(o);});
+  aplicar();
+}
+
+function ugLabel(coug,cogest){const nm=UG_NAMES[String(coug)];return fmtG(cogest)+' \u00b7 '+String(coug)+(nm?' \u2014 '+nm:'');}
+
+let acData=[];
+function onAC(){
+  const v=document.getElementById('ac-ug').value.trim().toLowerCase();
+  document.getElementById('ac-clr').style.display=v?'block':'none';
+  if(!v){closeAC();ugSel='';aplicar();return;}
+  const hits=acData.filter(x=>x.label.toLowerCase().includes(v)).slice(0,40);
+  const dd=document.getElementById('ac-dd');
+  if(!hits.length){dd.innerHTML='<div class="ac-dd-empty">Nenhuma UG encontrada.</div>';dd.style.display='block';return;}
+  dd.innerHTML=hits.map(x=>`<div class="ac-dd-item" onmousedown="pickAC('${x.id}','${x.label.replace(/'/g,"\\'")}')"><strong>${x.id}</strong> — ${x.name||''}</div>`).join('');
+  dd.style.display='block';
+}
+function pickAC(id,lbl){document.getElementById('ac-ug').value=lbl;document.getElementById('ac-clr').style.display='block';document.getElementById('ac-dd').style.display='none';ugSel=id;aplicar();}
+function closeAC(){document.getElementById('ac-dd').style.display='none';}
+function clearAC(){document.getElementById('ac-ug').value='';document.getElementById('ac-clr').style.display='none';ugSel='';aplicar();}
+
+function aplicar(){
+  mesSel=document.getElementById('fmes').value;
+  gestSel=document.getElementById('fgest').value;
+  const data=window.ALL.filter(r=>{
+    if(mesSel&&n(r.INMES)>Number(mesSel))return false;
+    if(gestSel&&String(r.COGESTAO||'')!==gestSel)return false;
+    return true;
+  });
+  const ugIds=[...new Set(data.map(r=>String(r.COUG)))].sort();
+  acData=ugIds.map(id=>({id,name:UG_NAMES[id]||'',label:id+(UG_NAMES[id]?' — '+UG_NAMES[id]:'')}));
+
+  const map={};
+  data.forEach(r=>{
+    const key=String(r.COGESTAO)+'|'+String(r.COUG);
+    if(!map[key])map[key]={key,COGESTAO:r.COGESTAO,COUG:r.COUG,
+                           totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,divEQ5:0,divEQ6:0,maxDiv:0,byAcct:{},rows:[]};
+    const d=map[key];
+    const vl=n(r.VLSALDO);
+    const acct=String(r.COCONTACONTABIL);
+    d.byAcct[acct]=(d.byAcct[acct]||0)+vl;
+    d.rows.push(r);
+    if(isAtivo(acct))d.totAtivo+=vl;
+    else if(isPassivo(acct))d.totPassivo+=vl;
+  });
+  Object.values(map).forEach(d=>{
+    d.totAtivo=Math.round(d.totAtivo*100)/100;
+    d.totPassivo=Math.round(d.totPassivo*100)/100;
+    EQUACOES.forEach(eq=>{
+      const pas=Math.round(passivoEq(eq,d.byAcct)*100)/100;
+      const ati=Math.round(eq.ativo.reduce((s,c)=>s+(d.byAcct[String(c)]||0),0)*100)/100;
+      const div=Math.round((pas-ati)*100)/100;
+      if(eq.id==='EQ1')d.divEQ1=div;
+      if(eq.id==='EQ2')d.divEQ2=div;
+      if(eq.id==='EQ3')d.divEQ3=div;
+      if(eq.id==='EQ4')d.divEQ4=div;
+      if(eq.id==='EQ5')d.divEQ5=div;
+      if(eq.id==='EQ6')d.divEQ6=div;
+    });
+    d.maxDiv=[d.divEQ1,d.divEQ2,d.divEQ3,d.divEQ4,d.divEQ5,d.divEQ6].reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
+  });
+
+  filDocs=Object.values(map).filter(d=>{
+    if(ugSel&&String(d.COUG)!==ugSel)return false;
+    if(filterMode==='eq1'&&Math.abs(d.divEQ1)<0.005)return false;
+    if(filterMode==='eq2'&&Math.abs(d.divEQ2)<0.005)return false;
+    if(filterMode==='eq3'&&Math.abs(d.divEQ3)<0.005)return false;
+    if(filterMode==='eq4'&&Math.abs(d.divEQ4)<0.005)return false;
+    if(filterMode==='eq5'&&Math.abs(d.divEQ5)<0.005)return false;
+    if(filterMode==='eq6'&&Math.abs(d.divEQ6)<0.005)return false;
+    return true;
+  });
+  filDocs.sort(cmpDocs);pg=1;render();kpis();
+}
+
+const SORT_COLS=['UG','ATIVO','PASSIVO','DIV'];
+let sortInit=false;
+function sortBy(col){
+  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
+  SORT_COLS.forEach(c=>{const el=document.getElementById('s_'+c);if(el)el.textContent=c===sortCol?(sortDir>0?'\u2191':'\u2193'):'\u21c5';});
+  filDocs.sort(cmpDocs);pg=1;render();
+}
+function cmpDocs(a,b){
+  if(sortCol==='UG')    return sortDir*(String(a.COUG).localeCompare(String(b.COUG)));
+  if(sortCol==='MES')   return sortDir*(a.INMES-b.INMES);
+  if(sortCol==='ATIVO') return sortDir*(n(a.totAtivo)-n(b.totAtivo));
+  if(sortCol==='PASSIVO')return sortDir*(n(a.totPassivo)-n(b.totPassivo));
+  if(sortCol==='DIV')   return sortDir*(Math.abs(n(a.maxDiv))-Math.abs(n(b.maxDiv)));
+  return 0;
+}
+
+function toggleDoc(did){
+  const tog=document.getElementById('tog_'+did);
+  if(tog)tog.classList.toggle('open');
+  document.querySelectorAll('[data-doc="'+did+'"]').forEach(r=>r.classList.toggle('open'));
+}
+
+function render(){
+  const tb=document.getElementById('tb');
+  const tf=document.getElementById('tfoot-row');
+  const start=(pg-1)*PG_SZ,end=Math.min(start+PG_SZ,filDocs.length);
+  let html='';
+  filDocs.slice(start,end).forEach(d=>{
+    const did='d'+String(d.key).replace(/[^a-z0-9]/gi,'_');
+    const totA=n(d.totAtivo),totP=n(d.totPassivo);
+    const _dp=[];
+    if(Math.abs(n(d.divEQ1))>=0.005)_dp.push('EQ1 '+brl(n(d.divEQ1)));
+    if(Math.abs(n(d.divEQ2))>=0.005)_dp.push('EQ2 '+brl(n(d.divEQ2)));
+    if(Math.abs(n(d.divEQ3))>=0.005)_dp.push('EQ3 '+brl(n(d.divEQ3)));
+    if(Math.abs(n(d.divEQ4))>=0.005)_dp.push('EQ4 '+brl(n(d.divEQ4)));
+    if(Math.abs(n(d.divEQ5))>=0.005)_dp.push('EQ5 '+brl(n(d.divEQ5)));
+    if(Math.abs(n(d.divEQ6))>=0.005)_dp.push('EQ6 '+brl(n(d.divEQ6)));
+    const divStr=_dp.length?_dp.join(' / '):'\u2014';
+    const hasdiv=_dp.length>0;
+    html+='<tr class="row-ug" onclick="toggleDoc(\''+did+'\')">'
+      +'<td><span class="tog" id="tog_'+did+'">&#9654;</span></td>'
+      +'<td class="left">'+ugLabel(d.COUG,d.COGESTAO)+'</td>'
+      +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
+      +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
+      +'<td class="'+(hasdiv?'vp':'vz')+'" style="font-size:11px;white-space:nowrap">'+divStr+'</td>'
+      +'</tr>';
+    // detalhe: agrupa por conta, soma meses
+    const byAcctRows={};
+    d.rows.forEach(r=>{const a=String(r.COCONTACONTABIL);byAcctRows[a]=(byAcctRows[a]||0)+n(r.VLSALDO);});
+    const acctsSorted=Object.keys(byAcctRows).sort();
+    acctsSorted.forEach((acct,j)=>{
+      const vl=byAcctRows[acct];
+      const contaNome=CONTA_NAMES[acct]?' <span style="font-size:10px;opacity:.65">'+CONTA_NAMES[acct]+'</span>':'';
+      html+='<tr class="dr'+(j%2?' alt':'')+'" data-doc="'+did+'">'
+        +'<td></td>'
+        +'<td class="left" style="font-size:11px;padding-left:24px">'
+        +'<code style="font-size:11px;color:var(--navy)">'+acct+'</code>'+contaNome+'</td>'
+        +'<td class="'+(isAtivo(acct)?(Math.abs(vl)<0.005?'vz':vc(vl)):'vz')+'">'+(isAtivo(acct)&&Math.abs(vl)>=0.005?brl(vl):'\u2014')+'</td>'
+        +'<td class="'+(isPassivo(acct)?(Math.abs(vl)<0.005?'vz':vc(vl)):'vz')+'">'+(isPassivo(acct)&&Math.abs(vl)>=0.005?brl(vl):'\u2014')+'</td>'
+        +'<td class="vz">\u2014</td>'
+        +'</tr>';
+    });
+  });
+  tb.innerHTML=html||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Nenhuma UG encontrada.</td></tr>';
+  const totA=filDocs.reduce((s,d)=>s+n(d.totAtivo),0);
+  const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
+  const nDiv=filDocs.filter(d=>Math.abs(n(d.maxDiv))>=0.005).length;
+  tf.innerHTML='<td class="left">Total \u00b7 '+filDocs.length.toLocaleString('pt-BR')+' UG(s)</td>'
+    +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
+    +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
+    +'<td class="'+(nDiv>0?'vp':'vz')+'" style="font-size:11px">'+(nDiv>0?nDiv.toLocaleString('pt-BR')+' com diverg.':'\u2014')+'</td>';
+  document.getElementById('ttitle').textContent=filDocs.length.toLocaleString('pt-BR')+' UG(s)';
+  paginar();
+}
+
+function kpis(){
+  const totD1=filDocs.reduce((s,d)=>s+n(d.divEQ1),0);
+  const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
+  const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
+  const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
+  const totD5=filDocs.reduce((s,d)=>s+n(d.divEQ5),0);
+  const totD6=filDocs.reduce((s,d)=>s+n(d.divEQ6),0);
+  document.getElementById('kv-eq1').innerHTML='<span class="'+vc(totD1)+'">'+brl(totD1)+'</span>';
+  document.getElementById('kv-eq2').innerHTML='<span class="'+vc(totD2)+'">'+brl(totD2)+'</span>';
+  document.getElementById('kv-eq3').innerHTML='<span class="'+vc(totD3)+'">'+brl(totD3)+'</span>';
+  document.getElementById('kv-eq4').innerHTML='<span class="'+vc(totD4)+'">'+brl(totD4)+'</span>';
+  document.getElementById('kv-eq5').innerHTML='<span class="'+vc(totD5)+'">'+brl(totD5)+'</span>';
+  document.getElementById('kv-eq6').innerHTML='<span class="'+vc(totD6)+'">'+brl(totD6)+'</span>';
+  document.getElementById('kpi-eq1').className='kpi'+(Math.abs(totD1)>0.005?' ka':'');
+  document.getElementById('kpi-eq2').className='kpi'+(Math.abs(totD2)>0.005?' km':'');
+  document.getElementById('kpi-eq3').className='kpi'+(Math.abs(totD3)>0.005?' kg':'');
+  document.getElementById('kpi-eq4').className='kpi'+(Math.abs(totD4)>0.005?' kv4':'');
+  document.getElementById('kpi-eq5').className='kpi'+(Math.abs(totD5)>0.005?' kv5':'');
+  document.getElementById('kpi-eq6').className='kpi'+(Math.abs(totD6)>0.005?' kv6':'');
+}
+
+function paginar(){
+  const tot=filDocs.length,pages=Math.max(1,Math.ceil(tot/PG_SZ));
+  document.getElementById('pg-info').textContent='Pág. '+pg+' / '+pages;
+}
+function mudarPg(d){
+  const pages=Math.max(1,Math.ceil(filDocs.length/PG_SZ));
+  pg=Math.max(1,Math.min(pages,pg+d));render();
+}
+
+function filtrarEq(eq){
+  filterMode=filterMode===eq?'':eq;
+  ['eq1','eq2','eq3','eq4','eq5','eq6'].forEach(e=>{
+    document.getElementById('btn-'+e).classList.toggle('active',filterMode===e);
+  });
+  aplicar();
+}
+function limpar(){
+  filterMode='';ugSel='';
+  document.getElementById('ac-ug').value='';
+  document.getElementById('ac-clr').style.display='none';
+  ['eq1','eq2','eq3','eq4','eq5','eq6'].forEach(e=>document.getElementById('btn-'+e).classList.remove('active'));
+  aplicar();
+}
+
+function exportCSV(){
+  const mesRef=mesSel?'Até '+(MESES_PT[Number(mesSel)]||mesSel):'Ano completo';
+  const hdr=['Gestao','COUG','Nome UG','Periodo','Ativo','Passivo','Divergencia'];
+  const rows=filDocs.map(d=>[
+    fmtG(d.COGESTAO),String(d.COUG),UG_NAMES[String(d.COUG)]||'',
+    mesRef,
+    n(d.totAtivo).toFixed(2),n(d.totPassivo).toFixed(2),
+    n(d.maxDiv).toFixed(2)
+  ]);
+  const csv=[hdr,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
+  a.download='correspondencia_saldo.csv';a.click();
+}
+
+document.getElementById('loading').classList.add('show');
+</script>
+</body>
+</html>
