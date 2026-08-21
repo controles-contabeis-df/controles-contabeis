@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conciliação SIGGO e SISGEPAT - Bens Intangíveis</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--navy:#0d1b3e;--navy-mid:#162550;--navy-light:#1e3267;--teal:#0090a8;--teal-light:#00b8d4;--surface:#fff;--bg:#f2f5f9;--border:#dce3ed;--row-alt:#f7f9fc;--hover:#eaf4f7;--text:#1a2033;--muted:#6b7a99;--red:#c0392b;--green:#1a7a44;--radius:10px;--shadow:0 2px 12px rgba(13,27,62,.10)}
+body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
+header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 3px 16px rgba(13,27,62,.35);position:sticky;top:0;z-index:100}
+.hlogo{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-right:14px}
+header h1{font-size:14px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-transform:none;letter-spacing:0;margin-top:1px}
+#ts{font-size:11px;color:#7a99bb;white-space:nowrap}
+.voltar{font-size:11px;color:#7a99bb;text-decoration:none;display:flex;align-items:center;gap:4px;margin-left:20px;opacity:.8}
+.voltar:hover{opacity:1}
+.krow{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;padding:18px 28px 4px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,var(--teal),var(--teal-light))}
+.kpi.ka::before{background:linear-gradient(90deg,var(--red),#e74c3c)}
+.kl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.kv{font-size:19px;font-weight:700;letter-spacing:-.5px;line-height:1}
+.kv.neg{color:var(--red)}
+.fbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.ac-wrap{position:relative;min-width:200px}
+.ac-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}
+.ac-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
+.ac-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}
+.ac-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
+.ac-dd-item{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);transition:background .1s}
+.ac-dd-item:last-child{border-bottom:none}
+.ac-dd-item:hover{background:var(--hover)}
+.ac-dd-item strong{color:var(--navy);font-weight:700}
+.ac-dd-empty{padding:12px;color:var(--muted);font-size:12px;text-align:center}
+.bgrp{display:flex;gap:8px;margin-left:auto;align-items:flex-end;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:7px 16px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:filter .15s,transform .1s;white-space:nowrap}
+.btn:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.btn-p{background:var(--teal);color:#fff}
+.btn-g{background:var(--border);color:var(--text)}
+.btn-r{background:var(--red);color:#fff}
+.mes-badge{background:var(--navy);color:#c8d8ec;border-radius:6px;padding:7px 14px;font-size:13px;font-weight:600;letter-spacing:.3px;white-space:nowrap}
+.tsec{padding:16px 28px 32px}
+.thead-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.ttitle{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.sw{position:relative}
+.sw input{border:2px solid var(--teal);border-radius:6px;padding:8px 12px;font-size:13px;width:280px;background:#fff;box-shadow:0 0 0 3px rgba(0,144,168,.08)}
+.sw input:focus{outline:none;border-color:var(--navy)}
+.sw input::placeholder{color:var(--teal);font-weight:500}
+.tw{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:600px}
+thead th{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;letter-spacing:.3px;vertical-align:bottom}
+thead th.right{text-align:right}
+thead th .sub{display:block;font-size:9px;font-weight:400;opacity:.7;margin-top:2px;letter-spacing:0}
+tbody tr{transition:background .1s}
+tbody tr:hover td{background:var(--hover)!important}
+td{padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}
+td.right{text-align:right}
+.vneg{color:var(--red);font-weight:700}
+.vpos{color:var(--green);font-weight:700}
+tfoot td{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px}
+.empty{text-align:center;padding:56px;color:var(--muted)}
+tr.grp-l1{background:var(--navy);cursor:pointer}
+tr.grp-l1 td{color:#e8f0fc;font-weight:700;padding:9px 14px}
+tr.grp-l1:hover td{background:var(--navy-mid)!important}
+tr.grp-l2 td{padding:8px 14px 8px 28px;background:var(--surface)}
+tr.grp-l2:nth-child(even) td{background:var(--row-alt)}
+tr.grp-l2:hover td{background:var(--hover)!important}
+.tog{margin-right:6px;font-style:normal;display:inline-block;width:12px}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex;align-items:center">
+    <div class="hlogo">&#x1F4BB;</div>
+    <h1>Concilia&#231;&#227;o SIGGO e SISGEPAT &#8212; Bens Intang&#237;veis
+      <span>SIGGO &middot; Ano Exerc&#237;cio 2026</span>
+    </h1>
+    <a class="voltar" href="index.html">&#8592; Painel inicial</a>
+  </div>
+  <span id="ts">Gerado em: —</span>
+</header>
+<div class="krow" id="krow"></div>
+<div class="fbar">
+  <div class="fg"><label>M&#234;s de Refer&#234;ncia</label>
+    <div class="mes-badge" id="mes-ref">—</div>
+  </div>
+  <div class="fg"><label>Unidade Gestora</label>
+    <div class="ac-wrap" style="min-width:280px">
+      <input id="fu-input" class="ac-input" type="text" placeholder="C&#243;digo ou nome..." autocomplete="off" oninput="onAC('u')" onfocus="onAC('u')" onblur="offAC('u')">
+      <button class="ac-clear" id="fu-clear" onclick="limAC('u')" title="Limpar">&#x2715;</button>
+      <div class="ac-dd" id="fu-dd"></div>
+    </div>
+  </div>
+  <div class="fg"><label>Conta Cont&#225;bil</label>
+    <div class="ac-wrap" style="min-width:300px">
+      <input id="fc-input" class="ac-input" type="text" placeholder="C&#243;digo ou nome..." autocomplete="off" oninput="onAC('c')" onfocus="onAC('c')" onblur="offAC('c')">
+      <button class="ac-clear" id="fc-clear" onclick="limAC('c')" title="Limpar">&#x2715;</button>
+      <div class="ac-dd" id="fc-dd"></div>
+    </div>
+  </div>
+  <div class="bgrp">
+    <button class="btn btn-r" id="btn-dif" onclick="toggleDif()">&#x26A0; Somente Diferen&#231;as</button>
+    <button class="btn btn-g" onclick="expandAll()">&#x25BC; Expandir tudo</button>
+    <button class="btn btn-g" onclick="collapseAll()">&#x25B2; Recolher tudo</button>
+    <button class="btn btn-g" onclick="limpar()">&#x21BA; Limpar filtros</button>
+    <button class="btn btn-p" onclick="exportar()">&#x2B07; Exportar CSV</button>
+  </div>
+</div>
+<div class="tsec">
+  <div class="thead-row">
+    <span class="ttitle" id="cnt"></span>
+    <div class="sw"><input id="busca" type="text" placeholder="Buscar na tabela..." oninput="aplicar()"></div>
+  </div>
+  <div class="tw"><table>
+    <thead><tr>
+      <th>Unidade Gestora / Conta Cont&#225;bil</th>
+      <th class="right">SIGGO<span class="sub">124XXXXXX</span></th>
+      <th class="right">SISGEPAT<span class="sub">Elemento de Despesa 40</span></th>
+      <th class="right">Diverg&#234;ncia</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+    <tfoot id="tfoot"></tfoot>
+  </table></div>
+</div>
+<script>
+const B64_META="H4sIAMeKiGoC/z2LSw5AMBCGryL/uokq8ZgjuEQzdMKiNKlaibsrC9vvcWGTw3qexIMwnn4NUB/bzw3UKfAeQEabVmGRyC5YyQKmKnVfvryoGjI91UMeHSe2c4hJcqL/BPcDmbB/UGgAAAA=";
+const B64_QUADRO="H4sIAMeKiGoC/72YX46jOBDGr2LxnFj+C6bfDDgZrwiObMhIs1rNQUbzNA8tjbQX2OvkYluQJnHo9AQNyUgtRW2+wO8rqsrl/P0tKV23TV4SwgglNFklzen/1tuia3SNKoNK17Q6oMqhyga40Dq0MZXxugb9cBG+QJmgcAdChnuMq8Ft2s/amwCrrWt1/TXY7dYlL5nIBCEKM7pKgq4rBxfC1ux1m7wQTFZJZTfGm6bUsfb76tHA7ANgZHZwp2Cag6sPdmea1k0tsFzmglPM2X0LF21kgU4s7L0rO68r561Ga7TtgR8bdcopSYXimKv7zJH4GdBLIq9kLlOOKZ8R+bM2NsHBBL+YCOb4evzh+txx/viqh6eiSqNgTPn74ZYkU5QyhemMLI/EDyNdEmNKZU4Eu8kuCcX5dZhBrqQg10VKJSDImN4f7PF1wK/tbm++aNT5Qjf6VsqsUai734++EoqQIcr3Qj8qY/L0Os2DKb1pdZ/kwG5Cq6vBham6Ur+9EvjbPPIV3GSHTpJO8NentZhewXOjrOkaezA+2EoD8o1IQ+F2zQ342bFmLM0px2xOKxylES8E6dfRxvDRet2EvfMtrKCdK2x98bMEXXKWZum8ZnLWPhd+QdKILFezkv5NGBuhvzKit96WGOlCh9aUp4eDlxMO8t2yjUnOLNU3YUzN7oW//4T+uAXEBlom2h//K2pb6qWZAxukTAknOJOzdtNRPIWPCnXv6uO/JaDvIEHAxAfFut/9gU6j8nxqYn1amxoQFwOl8/uhMRZuV+A7NspityT+XGY0k1ik96N/lj4X/eHNXkhO3r2EcXXqRd7Io9IebP1RFpVLoi94xmCmxfmM8F+0MTOfU7hlV7dQuNBpDCBhVML1/sqy0p09GbzrNvI9NB5h+xeMT5yrvuMXuv7U90i4WbW42zCiYBynWIr32DRnPFUwq4lJs0zh3IHFM/kXpDzlQko4X8gbh5ER/doPVSplAtP4QMLUnDQazcG0CQ7RJ13Y5VmUQlLTLMdZfj+TLtqInbP+GHtht01obdu1Qxvae3Ow1fFn09dx5QIapmc4aJmweOfKlCQpTmeMa2dphC3EnJD/1YGZfr+FIu6HHd3YxUUgIWFgeFQzNtyz9Jngj274FBq5kJO0X4+rsZNJHfcA3tVv5/An/HSQwUGaCkxmRP4sjXknVVqZjWnCAHs1jj3upw7Gsv48ms+Zzc7a7//8D+QzRmcTEwAA";
+async function decomp(b64){const bin=atob(b64),buf=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)buf[i]=bin.charCodeAt(i);const ds=new DecompressionStream("gzip"),w=ds.writable.getWriter();w.write(buf);w.close();return JSON.parse(new TextDecoder().decode(await new Response(ds.readable).arrayBuffer()));}
+const brl=v=>isNaN(v)||v==null?'—':Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const vcls=v=>Math.abs(v||0)<0.005?brl(0):(v<0?'<span class="vneg">'+brl(v)+'</span>':'<span class="vpos">'+brl(v)+'</span>');
+let ALL=[],fil=[];
+function buildList(keyFn,labelFn){const m={};ALL.forEach(r=>{const k=keyFn(r);if(k!=null&&k!==''&&!m[k])m[k]=labelFn(r);});return Object.entries(m).map(([c,label])=>{return{c,label}}).sort((a,b)=>a.c.localeCompare(b.c,'pt-BR'));}
+let acState={};
+function selACI(el){selAC(el.dataset.k,el.dataset.c,el.dataset.lbl);}
+function renderACDD(k,lista){const dd=document.getElementById(acState[k].dd);if(!lista.length){dd.innerHTML='<div class="ac-dd-empty">Nenhum resultado</div>';dd.style.display='block';return;}dd.innerHTML=lista.slice(0,120).map(x=>{const sep=x.label.indexOf(' - ');const h=sep>=0?'<strong>'+x.label.slice(0,sep)+'</strong> &mdash; '+x.label.slice(sep+2):x.label;const sl=x.label.replace(/"/g,'&quot;');return '<div class="ac-dd-item" data-k="'+k+'" data-c="'+x.c+'" data-lbl="'+sl+'" onmousedown="selACI(this)">'+h+'</div>';}).join('');dd.style.display='block';}
+function onAC(k){const st=acState[k],v=document.getElementById(st.inp).value.toLowerCase();const m=v?st.list.filter(x=>x.c.includes(v)||x.label.toLowerCase().includes(v)):st.list;renderACDD(k,m);}
+function offAC(k){setTimeout(()=>document.getElementById(acState[k].dd).style.display='none',200);}
+function selAC(k,c,label){const st=acState[k];st.sel=c;document.getElementById(st.inp).value=label;document.getElementById(st.dd).style.display='none';document.getElementById(st.clr).style.display='block';aplicar();}
+function limAC(k){const st=acState[k];st.sel='';document.getElementById(st.inp).value='';document.getElementById(st.clr).style.display='none';aplicar();}
+let _somenteDif=false;
+function aplicar(){const b=document.getElementById('busca').value.trim().toLowerCase();fil=ALL.filter(r=>{if(acState['u'].sel&&r.COUG!==acState['u'].sel)return false;if(acState['c'].sel&&r.CONTA!==acState['c'].sel)return false;if(_somenteDif&&Math.abs(r.DIFERENCA||0)<0.005)return false;if(b&&!(r.UG_LABEL||'').toLowerCase().includes(b)&&!(r.CONTA_LABEL||'').toLowerCase().includes(b))return false;return true;});render();}
+function toggleDif(){_somenteDif=!_somenteDif;const btn=document.getElementById('btn-dif');btn.style.filter=_somenteDif?'brightness(0.75)':'';btn.style.boxShadow=_somenteDif?'inset 0 2px 5px rgba(0,0,0,.35)':'';aplicar();}
+function expandAll(){document.querySelectorAll('tr.grp-l1').forEach(r=>{const id=r.dataset.id;if(id){document.querySelectorAll('tr[data-p="'+id+'"]').forEach(c=>c.style.display='');r.querySelector('.tog').innerHTML='&#9660;';}});}
+function collapseAll(){document.querySelectorAll('tr.grp-l2').forEach(r=>r.style.display='none');document.querySelectorAll('.tog').forEach(t=>t.innerHTML='&#9654;');}
+function limpar(){document.getElementById('busca').value='';['u','c'].forEach(k=>limAC(k));_somenteDif=false;const b=document.getElementById('btn-dif');b.style.filter='';b.style.boxShadow='';aplicar();}
+function renderKPIs(){
+  const totSIG=fil.reduce((a,r)=>a+(r.TOTAL_SIGGO||0),0);
+  const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
+  const totDIF=fil.reduce((a,r)=>a+(r.DIFERENCA||0),0);
+  document.getElementById('kv-sig').textContent=brl(totSIG);
+  document.getElementById('kv-sis').textContent=brl(totSIS);
+  document.getElementById('kv-dif').innerHTML=vcls(totDIF);
+  document.getElementById('ks-sig').innerHTML='Contas cont&aacute;beis 124XXXXXX &mdash; Bens Intang&iacute;veis';
+  document.getElementById('ks-sis').innerHTML='Elemento de Despesa 40 &mdash; Servi&ccedil;o de Tecnologia da Informa&ccedil;&atilde;o e Comunica&ccedil;&atilde;o';
+  document.getElementById('ks-dif').innerHTML='SIGGO &minus; SISGEPAT &mdash; diferen&ccedil;a a ser analisada e regularizada';
+  document.getElementById('kpi-dif').classList.toggle('ka',Math.abs(totDIF)>=0.01);
+}
+function render(){
+  renderKPIs();
+  const tb=document.getElementById('tbody'),tf=document.getElementById('tfoot');
+  const totSIG=fil.reduce((a,r)=>a+(r.TOTAL_SIGGO||0),0);
+  const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
+  const totDIF=fil.reduce((a,r)=>a+(r.DIFERENCA||0),0);
+  document.getElementById('cnt').textContent=fil.length.toLocaleString('pt-BR')+' linha'+(fil.length!==1?'s':'');
+  if(!fil.length){tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro encontrado.</td></tr>';tf.innerHTML='';return;}
+  const tree={};
+  fil.forEach(r=>{
+    const u=r.COUG,co=r.CONTA;
+    if(!tree[u])tree[u]={sig:0,sis:0,dif:0,lbl:r.UG_LABEL,ch:{}};
+    if(!tree[u].ch[co])tree[u].ch[co]={sig:0,sis:0,dif:0,lbl:r.CONTA_LABEL};
+    tree[u].ch[co].sig+=r.TOTAL_SIGGO||0;tree[u].ch[co].sis+=r.SALDO_SISGEPAT||0;tree[u].ch[co].dif+=r.DIFERENCA||0;
+    tree[u].sig+=r.TOTAL_SIGGO||0;tree[u].sis+=r.SALDO_SISGEPAT||0;tree[u].dif+=r.DIFERENCA||0;
+  });
+  let html='',idx=0;
+  const srt=o=>Object.keys(o).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  srt(tree).forEach(u=>{const uid='r'+(idx++),uN=tree[u];
+    html+='<tr class="grp-l1" data-id="'+uid+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';
+    srt(uN.ch).forEach(co=>{const coN=uN.ch[co];
+      html+='<tr class="grp-l2" data-p="'+uid+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';
+    });
+  });
+  tb.innerHTML=html;
+  tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
+}
+function tog(id){const row=document.querySelector('tr[data-id="'+id+'"]');const togEl=row.querySelector('.tog');const exp=togEl.innerHTML==='&#9660;'||togEl.textContent==='▼';if(exp){collapseDesc(id);togEl.innerHTML='&#9654;';}else{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{r.style.display='';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';});togEl.innerHTML='&#9660;';}}
+function collapseDesc(id){document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{const cid=r.getAttribute('data-id');if(cid)collapseDesc(cid);r.style.display='none';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';});}
+function exportar(){if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['COUG','Unidade Gestora','Conta','Nome Conta','SIGGO','SISGEPAT','Divergencia'];const keys=['COUG','NOUG','CONTA','NOCONTA','TOTAL_SIGGO','SALDO_SISGEPAT','DIFERENCA'];const cel=v=>{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\d+$/.test(s)?'"'+s+'"':s;};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\n');const a=Object.assign(document.createElement('a'),{href:URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'})),download:'conciliacao_bens_intangiveis_sisgepat.csv'});a.click();URL.revokeObjectURL(a.href);}
+(async()=>{
+  const [meta,quadro]=await Promise.all([decomp(B64_META),decomp(B64_QUADRO)]);
+  quadro.forEach(r=>{r.UG_LABEL=r.COUG+(r.NOUG?' - '+r.NOUG:'');r.CONTA_LABEL=r.CONTA+(r.NOCONTA?' - '+r.NOCONTA:'');});
+  ALL=quadro;
+  document.getElementById('ts').textContent='Gerado em: '+meta.gerado_em;
+  document.getElementById('krow').innerHTML=
+    '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
+    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
+    '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
+  document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
+  acState={
+    'u':{sel:'',list:buildList(r=>r.COUG,r=>r.UG_LABEL),inp:'fu-input',clr:'fu-clear',dd:'fu-dd'},
+    'c':{sel:'',list:buildList(r=>r.CONTA,r=>r.CONTA_LABEL),inp:'fc-input',clr:'fc-clear',dd:'fc-dd'}
+  };
+  aplicar();
+})();
+window.tog=tog;window.collapseDesc=collapseDesc;
+window.onAC=onAC;window.offAC=offAC;window.selAC=selAC;window.limAC=limAC;window.selACI=selACI;
+window.aplicar=aplicar;window.limpar=limpar;window.exportar=exportar;
+window.toggleDif=toggleDif;window.expandAll=expandAll;window.collapseAll=collapseAll;
+</script>
+</body></html>
