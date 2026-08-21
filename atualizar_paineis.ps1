@@ -52,6 +52,7 @@ Executar-Script "extrair_rpp_por_ne.py"
 Executar-Script "extrair_intra_lancamento.py"
 Executar-Script "extrair_conciliacao_bens_imoveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_moveis_sisgepat.py"
+Executar-Script "extrair_conciliacao_bens_intangiveis_sisgepat.py"
 
 $env:NO_GIT_PUSH = ""
 
