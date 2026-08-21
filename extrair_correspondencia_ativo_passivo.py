@@ -61,12 +61,18 @@ EQUACOES = [
     {"id": "EQ4", "desc": "218820107 = 112120104",
      "passivo_exact": [218820107], "passivo_prefix": None,
      "ativo": [112120104]},
-    {"id": "EQ5", "desc": "218820108 = 112120107",
-     "passivo_exact": [218820108], "passivo_prefix": None,
+    {"id": "EQ5", "desc": "214320100 + 214325100 + 218820108 = 112120107",
+     "passivo_exact": [214320100, 214325100, 218820108], "passivo_prefix": None,
      "ativo": [112120107]},
     {"id": "EQ6", "desc": "218924019 = 112322200",
      "passivo_exact": [218924019], "passivo_prefix": None,
      "ativo": [112322200]},
+    {"id": "EQ7", "desc": "113220700 + 112920101 = 0",
+     "passivo_exact": [], "passivo_prefix": None,
+     "ativo": [113220700, 112920101]},
+    {"id": "EQ8", "desc": "218820199 + 218820403 = 113829900 + 113629901",
+     "passivo_exact": [218820199, 218820403], "passivo_prefix": None,
+     "ativo": [113829900, 113629901]},
 ]
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
@@ -194,6 +200,10 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .btn-eq5.active,.btn-eq5:hover{background:#e65100;color:#fff;border-color:#e65100}
 .btn-eq6{background:#e0f7fa;color:#00695c;border:1.5px solid #80cbc4}
 .btn-eq6.active,.btn-eq6:hover{background:#00695c;color:#fff;border-color:#00695c}
+.btn-eq7{background:#fce4ec;color:#880e4f;border:1.5px solid #f48fb1}
+.btn-eq7.active,.btn-eq7:hover{background:#880e4f;color:#fff;border-color:#880e4f}
+.btn-eq8{background:#e8eaf6;color:#283593;border:1.5px solid #9fa8da}
+.btn-eq8.active,.btn-eq8:hover{background:#283593;color:#fff;border-color:#283593}
 .emit-wrap{position:relative;min-width:180px}
 .emit-in{border:2px solid var(--teal);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;box-shadow:0 0 0 2px rgba(0,144,168,.08)}
 .emit-in:focus{outline:none;border-color:var(--navy)}
@@ -208,6 +218,8 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .kpi.kv4::before{background:linear-gradient(90deg,#5e35b1,#7e57c2)}
 .kpi.kv5::before{background:linear-gradient(90deg,#e65100,#fb8c00)}
 .kpi.kv6::before{background:linear-gradient(90deg,#00695c,#00897b)}
+.kpi.kv7::before{background:linear-gradient(90deg,#880e4f,#c2185b)}
+.kpi.kv8::before{background:linear-gradient(90deg,#283593,#3949ab)}
 .kl{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
 .kv{font-size:19px;font-weight:700;letter-spacing:-.3px;line-height:1}
 .ks{font-size:11px;color:var(--muted);margin-top:5px}
@@ -293,6 +305,8 @@ tfoot tr td.left{text-align:left}
     <button class="btn btn-eq4" id="btn-eq4" onclick="filtrarEq('eq4')">&#9888; Diverg. EQ4</button>
     <button class="btn btn-eq5" id="btn-eq5" onclick="filtrarEq('eq5')">&#9888; Diverg. EQ5</button>
     <button class="btn btn-eq6" id="btn-eq6" onclick="filtrarEq('eq6')">&#9888; Diverg. EQ6</button>
+    <button class="btn btn-eq7" id="btn-eq7" onclick="filtrarEq('eq7')">&#9888; Diverg. EQ7</button>
+    <button class="btn btn-eq8" id="btn-eq8" onclick="filtrarEq('eq8')">&#9888; Diverg. EQ8</button>
     <button class="btn btn-g" onclick="limpar()">&#8635; Limpar filtros</button>
     <button class="btn btn-p" onclick="exportarCSV()">&#8615; Exportar CSV</button>
   </div>
@@ -312,32 +326,42 @@ tfoot tr td.left{text-align:left}
   <div class="kpi" id="kpi-eq1">
     <div class="kl">Diverg&#234;ncia EQ1</div>
     <div class="kv" id="kv-eq1">&#8212;</div>
-    <div class="ks">21142XXXX = 113620101 + 113620103</div>
+    <div class="ks" id="ks-eq1"></div>
   </div>
   <div class="kpi" id="kpi-eq2">
     <div class="kl">Diverg&#234;ncia EQ2</div>
     <div class="kv" id="kv-eq2">&#8212;</div>
-    <div class="ks">218820101 = 113620102 + 113620104</div>
+    <div class="ks" id="ks-eq2"></div>
   </div>
   <div class="kpi" id="kpi-eq3">
     <div class="kl">Diverg&#234;ncia EQ3</div>
     <div class="kv" id="kv-eq3">&#8212;</div>
-    <div class="ks">218820104 = 112120101</div>
+    <div class="ks" id="ks-eq3"></div>
   </div>
   <div class="kpi" id="kpi-eq4">
     <div class="kl">Diverg&#234;ncia EQ4</div>
     <div class="kv" id="kv-eq4">&#8212;</div>
-    <div class="ks">218820107 = 112120104</div>
+    <div class="ks" id="ks-eq4"></div>
   </div>
   <div class="kpi" id="kpi-eq5">
     <div class="kl">Diverg&#234;ncia EQ5</div>
     <div class="kv" id="kv-eq5">&#8212;</div>
-    <div class="ks">218820108 = 112120107</div>
+    <div class="ks" id="ks-eq5"></div>
   </div>
   <div class="kpi" id="kpi-eq6">
     <div class="kl">Diverg&#234;ncia EQ6</div>
     <div class="kv" id="kv-eq6">&#8212;</div>
-    <div class="ks">218924019 = 112322200</div>
+    <div class="ks" id="ks-eq6"></div>
+  </div>
+  <div class="kpi" id="kpi-eq7">
+    <div class="kl">Diverg&#234;ncia EQ7</div>
+    <div class="kv" id="kv-eq7">&#8212;</div>
+    <div class="ks" id="ks-eq7"></div>
+  </div>
+  <div class="kpi" id="kpi-eq8">
+    <div class="kl">Diverg&#234;ncia EQ8</div>
+    <div class="kv" id="kv-eq8">&#8212;</div>
+    <div class="ks" id="ks-eq8"></div>
   </div>
 </div>
 
@@ -494,6 +518,8 @@ function filtrarEq(mode){
   document.getElementById('btn-eq4').classList.toggle('active',filterMode==='eq4');
   document.getElementById('btn-eq5').classList.toggle('active',filterMode==='eq5');
   document.getElementById('btn-eq6').classList.toggle('active',filterMode==='eq6');
+  document.getElementById('btn-eq7').classList.toggle('active',filterMode==='eq7');
+  document.getElementById('btn-eq8').classList.toggle('active',filterMode==='eq8');
   aplicar();
 }
 
@@ -522,7 +548,10 @@ function init(){
   fm.addEventListener('change',aplicar);
   document.getElementById('busca').addEventListener('input',aplicar);
   const feq=document.getElementById('feq');
-  EQUACOES.forEach(eq=>{const o=document.createElement('option');o.value=eq.id;o.textContent=eq.id+' \u2014 '+eq.desc;feq.appendChild(o);});
+  EQUACOES.forEach(eq=>{
+    const o=document.createElement('option');o.value=eq.id;o.textContent=eq.id+' \u2014 '+eq.desc;feq.appendChild(o);
+    const ks=document.getElementById('ks-'+eq.id.toLowerCase());if(ks)ks.textContent=eq.desc;
+  });
   feq.addEventListener('change',aplicar);
   const el=document.getElementById('s_DATA');if(el)el.textContent='\u2191';
   aplicar();
@@ -550,7 +579,7 @@ function aplicar(){
     const k=ek+'|'+(r.NUDOCUMENTO||'');
     if(!map[k])map[k]={key:k,emitKey:ek,NUDOCUMENTO:r.NUDOCUMENTO,rows:[],
                        minData:null,minDataISO:null,
-                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,divEQ5:0,divEQ6:0,byAcct:{}};
+                       totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,divEQ5:0,divEQ6:0,divEQ7:0,divEQ8:0,byAcct:{}};
     const d=map[k];
     d.rows.push(r);
     const vl=n(r.VLNET),acct=+r.COCONTACONTABIL;
@@ -570,8 +599,10 @@ function aplicar(){
       if(eq.id==='EQ4')d.divEQ4=div;
       if(eq.id==='EQ5')d.divEQ5=div;
       if(eq.id==='EQ6')d.divEQ6=div;
+      if(eq.id==='EQ7')d.divEQ7=div;
+      if(eq.id==='EQ8')d.divEQ8=div;
     });
-    d.maxDiv=[d.divEQ1,d.divEQ2,d.divEQ3,d.divEQ4,d.divEQ5,d.divEQ6].reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
+    d.maxDiv=[d.divEQ1,d.divEQ2,d.divEQ3,d.divEQ4,d.divEQ5,d.divEQ6,d.divEQ7,d.divEQ8].reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
   });
   filDocs=Object.values(map).filter(d=>{
     if(emitSel&&d.emitKey!==emitSel)return false;
@@ -581,6 +612,8 @@ function aplicar(){
     if(filterMode==='eq4'&&Math.abs(d.divEQ4)<0.005)return false;
     if(filterMode==='eq5'&&Math.abs(d.divEQ5)<0.005)return false;
     if(filterMode==='eq6'&&Math.abs(d.divEQ6)<0.005)return false;
+    if(filterMode==='eq7'&&Math.abs(d.divEQ7)<0.005)return false;
+    if(filterMode==='eq8'&&Math.abs(d.divEQ8)<0.005)return false;
     if(busca){
       const docOk=String(d.NUDOCUMENTO||'').toLowerCase().includes(busca);
       const evOk=d.rows.some(r=>r.COEVENTO!=null&&String(r.COEVENTO).toLowerCase().includes(busca));
@@ -605,6 +638,8 @@ function render(){
     if(Math.abs(n(d.divEQ4))>=0.005)_dp.push('EQ4\u00a0'+brl(n(d.divEQ4)));
     if(Math.abs(n(d.divEQ5))>=0.005)_dp.push('EQ5\u00a0'+brl(n(d.divEQ5)));
     if(Math.abs(n(d.divEQ6))>=0.005)_dp.push('EQ6\u00a0'+brl(n(d.divEQ6)));
+    if(Math.abs(n(d.divEQ7))>=0.005)_dp.push('EQ7\u00a0'+brl(n(d.divEQ7)));
+    if(Math.abs(n(d.divEQ8))>=0.005)_dp.push('EQ8\u00a0'+brl(n(d.divEQ8)));
     const divStr=_dp.length?_dp.join(' / '):'\u2014';
     const hasdiv=_dp.length>0;
     html+='<tr class="row-doc" onclick="toggleDoc(\''+did+'\')">'
@@ -642,11 +677,11 @@ function render(){
   tb.innerHTML=html||'<tr><td colspan="10" style="text-align:center;padding:24px;color:var(--muted)">Nenhum documento encontrado.</td></tr>';
   const totA=filDocs.reduce((s,d)=>s+n(d.totAtivo),0);
   const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
-  const nDiv=filDocs.filter(d=>Math.abs(n(d.maxDiv))>=0.005).length;
+  const totDiv=filDocs.reduce((s,d)=>s+n(d.maxDiv),0);
   tf.innerHTML='<td class="left" colspan="3">Total &middot; '+filDocs.length.toLocaleString('pt-BR')+' documento(s)</td>'
     +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
     +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
-    +'<td class="'+(nDiv>0?'vp':'vz')+'" style="font-size:11px">'+(nDiv>0?nDiv.toLocaleString('pt-BR')+' com diverg.':'—')+'</td>'
+    +'<td class="'+vc(totDiv)+'">'+brl(totDiv)+'</td>'
     +'<td colspan="4"></td>';
   document.getElementById('ttitle').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s)';
   paginar();
@@ -668,6 +703,8 @@ function kpis(){
   const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
   const totD5=filDocs.reduce((s,d)=>s+n(d.divEQ5),0);
   const totD6=filDocs.reduce((s,d)=>s+n(d.divEQ6),0);
+  const totD7=filDocs.reduce((s,d)=>s+n(d.divEQ7),0);
+  const totD8=filDocs.reduce((s,d)=>s+n(d.divEQ8),0);
   document.getElementById('kv-ativo').innerHTML='<span class="'+vc(totA)+'">'+brl(totA)+'</span>';
   document.getElementById('kv-passivo').innerHTML='<span class="'+vc(totP)+'">'+brl(totP)+'</span>';
   document.getElementById('kv-eq1').innerHTML='<span class="'+vc(totD1)+'">'+brl(totD1)+'</span>';
@@ -676,6 +713,8 @@ function kpis(){
   document.getElementById('kv-eq4').innerHTML='<span class="'+vc(totD4)+'">'+brl(totD4)+'</span>';
   document.getElementById('kv-eq5').innerHTML='<span class="'+vc(totD5)+'">'+brl(totD5)+'</span>';
   document.getElementById('kv-eq6').innerHTML='<span class="'+vc(totD6)+'">'+brl(totD6)+'</span>';
+  document.getElementById('kv-eq7').innerHTML='<span class="'+vc(totD7)+'">'+brl(totD7)+'</span>';
+  document.getElementById('kv-eq8').innerHTML='<span class="'+vc(totD8)+'">'+brl(totD8)+'</span>';
   document.getElementById('ks-ativo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('ks-passivo').textContent=filDocs.length.toLocaleString('pt-BR')+' documento(s) no filtro';
   document.getElementById('kpi-eq1').className='kpi'+(Math.abs(totD1)>0.005?' ka':'');
@@ -684,6 +723,8 @@ function kpis(){
   document.getElementById('kpi-eq4').className='kpi'+(Math.abs(totD4)>0.005?' kv4':'');
   document.getElementById('kpi-eq5').className='kpi'+(Math.abs(totD5)>0.005?' kv5':'');
   document.getElementById('kpi-eq6').className='kpi'+(Math.abs(totD6)>0.005?' kv6':'');
+  document.getElementById('kpi-eq7').className='kpi'+(Math.abs(totD7)>0.005?' kv7':'');
+  document.getElementById('kpi-eq8').className='kpi'+(Math.abs(totD8)>0.005?' kv8':'');
 }
 
 function paginar(){
@@ -736,6 +777,8 @@ function limpar(){
   document.getElementById('btn-eq4').classList.remove('active');
   document.getElementById('btn-eq5').classList.remove('active');
   document.getElementById('btn-eq6').classList.remove('active');
+  document.getElementById('btn-eq7').classList.remove('active');
+  document.getElementById('btn-eq8').classList.remove('active');
   document.getElementById('feq').value='';
   aplicar();
 }
