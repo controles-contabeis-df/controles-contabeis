@@ -17,7 +17,7 @@ Uso:
     python extrair_conciliacao_bens_moveis_sisgepat.py --mes 7 --ano 2026
     python extrair_conciliacao_bens_moveis_sisgepat.py --no-push
 """
-import argparse, base64, gzip, json, os, subprocess, sys
+import argparse, base64, gzip, json, os, subprocess, sys, re
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from datetime import date, datetime
 from pathlib import Path
@@ -73,6 +73,26 @@ def _de_para_sql():
     linhas = [f"  SELECT '{lo3}' LO3, '{coug}' COUG FROM dual" for lo3, coug in DE_PARA_ROWS]
     return "WITH de_para AS (\n" + " UNION ALL\n".join(linhas) + "\n)"
 
+# ── Utilitário ────────────────────────────────────────────────────────────────
+
+_LOWER_PT = {'a','e','o','de','da','do','das','dos','em','no','na','nos','nas',
+             'por','com','sem','ou','ao','aos','às'}
+
+# Nomes fixos para subitens que não existem ou estão extintos no VCONTACONTABIL
+_SUBITEM_FIXO = {
+    "17": "Subitem Extinto",
+    "47": "Equipamentos de Montaria",
+    "98": "Bens Móveis a Classificar",
+}
+
+def title_case_pt(s):
+    if not s:
+        return ''
+    words = s.strip().lower().split()
+    return ' '.join(w if (i > 0 and w in _LOWER_PT) else w.capitalize()
+                   for i, w in enumerate(words))
+
+
 # ── SQL ───────────────────────────────────────────────────────────────────────
 # SIGGO filtrado às UGs do de_para (Adm. Direta + Fundos da Direta)
 
@@ -96,7 +116,8 @@ sisgepat AS (
         ROUND(SUM(bm.MO_VALORATUAL) / 100, 2) AS SALDO_SISGEPAT
     FROM SIGGO.PAT_BENSMOVEIS bm
     JOIN de_para dp ON SUBSTR(bm.LO_CODIGO, 1, 3) = dp.LO3
-    WHERE bm.MO_DTINCORPORACAO IS NOT NULL
+    WHERE bm.EL_CODIGO = '52'
+      AND bm.MO_DTINCORPORACAO IS NOT NULL
       AND bm.MO_DTINCORPORACAO < :data_corte
       AND bm.MO_DTAQUISICAO IS NOT NULL
       AND bm.MO_DTAQUISICAO < :data_corte
@@ -122,12 +143,24 @@ siggo AS (
           OR v.COCONTACONTABIL BETWEEN 123111800 AND 123111899)
       AND v.COUG IN (SELECT COUG_NUM FROM cougs_direta)
     GROUP BY v.COUG, SUBSTR(TO_CHAR(v.COCONTACONTABIL), -2)
+),
+conta_names AS (
+    -- Nome da conta contábil no SIGGO, usado como fallback quando TP_DESCRICAO é nulo
+    SELECT
+        LPAD(SUBSTR(TO_CHAR(COCONTACONTABIL), -2), 2, '0') AS SUBITEM,
+        MIN(TRIM(NOCONTACONTABIL)) AS NOME_CONTA
+    FROM MIL2026.VCONTACONTABIL
+    WHERE COCONTACONTABIL BETWEEN 123110100 AND 123110199
+       OR COCONTACONTABIL BETWEEN 123110800 AND 123110899
+       OR COCONTACONTABIL BETWEEN 123111800 AND 123111899
+    GROUP BY SUBSTR(TO_CHAR(COCONTACONTABIL), -2)
 )
 SELECT
     NVL(si.COUG,         sg.COUG)    AS COUG,
     TRIM(ug.NOUG)                    AS NOUG,
     NVL(si.SUBITEM,      sg.SUBITEM) AS SUBITEM,
     NVL(si.DESC_SUBITEM, NVL(sd.DESC_SUBITEM, '')) AS DESC_SUBITEM,
+    cn.NOME_CONTA                    AS NOME_CONTA,
     NVL(sg.BENS_MOVEIS,       0)     AS BENS_MOVEIS,
     NVL(sg.BENS_MOVEIS_ALMOX, 0)     AS BENS_MOVEIS_ALMOX,
     NVL(sg.BENS_MOVEIS_IMPORT,0)     AS BENS_MOVEIS_IMPORT,
@@ -146,6 +179,8 @@ LEFT JOIN MIL2026.VUNIDADEGESTORA ug
     ON ug.COUG = TO_NUMBER(NVL(si.COUG, sg.COUG))
 LEFT JOIN subitem_desc sd
     ON sd.SUBITEM = NVL(si.SUBITEM, sg.SUBITEM)
+LEFT JOIN conta_names cn
+    ON cn.SUBITEM = NVL(si.SUBITEM, sg.SUBITEM)
 ORDER BY NVL(si.COUG, sg.COUG), NVL(si.SUBITEM, sg.SUBITEM)
 """
 
@@ -182,6 +217,19 @@ def extrair(mes, ano):
     df["SUBITEM"]      = df["SUBITEM"].astype(str).str.zfill(2)
     df["NOUG"]         = df["NOUG"].fillna("(sem nome)")
     df["DESC_SUBITEM"] = df["DESC_SUBITEM"].fillna("")
+    df["NOME_CONTA"]   = df["NOME_CONTA"].fillna("")
+
+    # Fallback para subitems sem TP_DESCRICAO:
+    # 1º) dict fixo para casos extintos ou inexistentes no VCONTACONTABIL
+    # 2º) nome automático do VCONTACONTABIL (via conta_names CTE), com title case
+    def _resolve_desc(r):
+        if str(r["DESC_SUBITEM"]).strip():
+            return r["DESC_SUBITEM"]
+        if r["SUBITEM"] in _SUBITEM_FIXO:
+            return _SUBITEM_FIXO[r["SUBITEM"]]
+        return title_case_pt(str(r["NOME_CONTA"])) if str(r["NOME_CONTA"]).strip() else ""
+
+    df["DESC_SUBITEM"] = df.apply(_resolve_desc, axis=1)
 
     # Remove linhas em que SIGGO e SISGEPAT são ambos zero (saldo nulo sem utilidade analítica)
     df = df[(df["TOTAL_SIGGO"].abs() > 0.005) | (df["SALDO_SISGEPAT"].abs() > 0.005)]
@@ -355,7 +403,7 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
       <th class="right">Bens M&#243;veis<span class="sub">1231101XX</span></th>
       <th class="right">Almox.<span class="sub">1231108XX</span></th>
       <th class="right">Import.<span class="sub">1231118XX</span></th>
-      <th class="right">Total SIGGO</th>
+      <th class="right">SIGGO</th>
       <th class="right">SISGEPAT</th>
       <th class="right">Diverg&#234;ncia</th>
     </tr></thead>
@@ -388,14 +436,12 @@ function renderKPIs(){{
   const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
   const totSIG=fil.reduce((a,r)=>a+(r.TOTAL_SIGGO||0),0);
   const totDIF=fil.reduce((a,r)=>a+(r.DIFERENCA||0),0);
-  const sub='Adm. Direta + Fundos da Direta &middot; contas 1231101XX, 1231108XX e 1231118XX';
-  const subDif='SIGGO &minus; SISGEPAT &mdash; diferen&ccedil;a a ser analisada e regularizada';
-  document.getElementById('kv-sis').textContent=brl(totSIS);
   document.getElementById('kv-sig').textContent=brl(totSIG);
+  document.getElementById('kv-sis').textContent=brl(totSIS);
   document.getElementById('kv-dif').innerHTML=vcls(totDIF);
-  document.getElementById('ks-sis').innerHTML=sub;
-  document.getElementById('ks-sig').innerHTML=sub;
-  document.getElementById('ks-dif').innerHTML=subDif;
+  document.getElementById('ks-sig').innerHTML='Contas cont&aacute;beis 1231101XX, 1231108XX e 1231118XX';
+  document.getElementById('ks-sis').innerHTML='Elemento de Despesa 52 &mdash; Equipamentos e Material Permanente';
+  document.getElementById('ks-dif').innerHTML='SIGGO &minus; SISGEPAT';
   document.getElementById('kpi-dif').classList.toggle('ka',Math.abs(totDIF)>=0.01);
 }}
 function render(){{
@@ -439,8 +485,8 @@ function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');c
   ALL=quadro;
   document.getElementById('ts').textContent='Gerado em: '+meta.gerado_em;
   document.getElementById('krow').innerHTML=
-    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
+    '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
   document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
   acState={{
