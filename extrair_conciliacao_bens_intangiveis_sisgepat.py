@@ -1,23 +1,25 @@
 """
-Conciliação Bens Móveis — SIGGO × SISGEPAT (contas 1231XXXXX)
+Conciliação Bens Intangíveis — SIGGO × SISGEPAT (contas 124XXXXXX)
 Gera painel HTML autocontido e publica no GitHub Pages.
 
-SISGEPAT: SIGGO.PAT_BENSMOVEIS agrupado por LOCAL DE GUARDA (LO_CODIGO, 3 primeiros
-          dígitos) convertido para COUG via de_para — mesma metodologia do colega.
+SISGEPAT: SIGGO.PAT_BENSMOVEIS filtrado por EL_CODIGO='40', agrupado por LOCAL
+          DE GUARDA (LO_CODIGO, 3 primeiros dígitos) → COUG via de_para.
           MO_VALORATUAL está em centavos → dividir por 100.
-SIGGO:    MIL2026.VSALDOCONTABIL — contas 1231101XX / 1231108XX / 1231118XX.
-          Restrito às UGs da Administração Direta e Fundos da Direta (de_para).
-Ligação:  COUG + SUBITEM (últimos 2 dígitos da conta = TP_CODIGO do SISGEPAT).
+          Mapeamento TP_CODIGO → Conta Contábil SIGGO:
+            TP 8  (Desenvolvimento de Sistemas)           → 124110100 SOFTWARES
+            TP 25 (Aquisição de Software)                 → 124110200 SOFTWARE EM DESENVOLVIMENTO
+            TP 26 (Desenvolvimento de Software/Encomenda) → 124110200 SOFTWARE EM DESENVOLVIMENTO
 
-de_para (LO3 → COUG): 75 entradas originais do colega + '143'→'700101' (SGDI,
-criada em abr/2026).
+SIGGO:    MIL2026.VSALDOCONTABIL — contas 124110100 e 124110200.
+          VADEBITO - VACREDITO (classe 1 — devedora).
+          Restrito às UGs da Administração Direta e Fundos da Direta (de_para).
 
 Uso:
-    python extrair_conciliacao_bens_moveis_sisgepat.py
-    python extrair_conciliacao_bens_moveis_sisgepat.py --mes 7 --ano 2026
-    python extrair_conciliacao_bens_moveis_sisgepat.py --no-push
+    python extrair_conciliacao_bens_intangiveis_sisgepat.py
+    python extrair_conciliacao_bens_intangiveis_sisgepat.py --mes 7 --ano 2026
+    python extrair_conciliacao_bens_intangiveis_sisgepat.py --no-push
 """
-import argparse, base64, gzip, json, os, subprocess, sys, re
+import argparse, base64, gzip, json, os, subprocess, sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from datetime import date, datetime
 from pathlib import Path
@@ -36,7 +38,7 @@ GITHUB_TOKEN  = os.environ.get("GITHUB_TOKEN", "")
 GITHUB_USER   = os.environ.get("GITHUB_USER", "")
 GITHUB_REPO   = os.environ.get("GITHUB_REPO", "")
 GITHUB_BRANCH = os.environ.get("GITHUB_BRANCH", "main")
-ARQUIVO_HTML  = "conciliacao_bens_moveis_sisgepat.html"
+ARQUIVO_HTML  = "conciliacao_bens_intangiveis_sisgepat.html"
 
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
@@ -44,7 +46,6 @@ MESES = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
          7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"}
 
 # ── de_para: LO3 (3 primeiros dígitos de LO_CODIGO) → COUG ──────────────────
-# Fonte: mapeamento do colega (75 entradas) + '143'→'700101' (SGDI, abr/2026)
 DE_PARA_ROWS = [
     ("002","220101"),("003","200101"),("004","210101"),("005","130103"),
     ("006","160101"),("012","230101"),("014","230103"),("019","170101"),
@@ -73,115 +74,70 @@ def _de_para_sql():
     linhas = [f"  SELECT '{lo3}' LO3, '{coug}' COUG FROM dual" for lo3, coug in DE_PARA_ROWS]
     return "WITH de_para AS (\n" + " UNION ALL\n".join(linhas) + "\n)"
 
-# ── Utilitário ────────────────────────────────────────────────────────────────
-
-_LOWER_PT = {'a','e','o','de','da','do','das','dos','em','no','na','nos','nas',
-             'por','com','sem','ou','ao','aos','às'}
-
-# Nomes fixos para subitens que não existem ou estão extintos no VCONTACONTABIL
-_SUBITEM_FIXO = {
-    "17": "Subitem Extinto",
-    "47": "Equipamentos de Montaria",
-    "98": "Bens Móveis a Classificar",
-}
-
-def title_case_pt(s):
-    if not s:
-        return ''
-    words = s.strip().lower().split()
-    return ' '.join(w if (i > 0 and w in _LOWER_PT) else w.capitalize()
-                   for i, w in enumerate(words))
-
-
 # ── SQL ───────────────────────────────────────────────────────────────────────
-# SIGGO filtrado às UGs do de_para (Adm. Direta + Fundos da Direta)
-
+# Mapeamento TP_CODIGO → conta contábil SIGGO aplicado no SISGEPAT.
+# Join feito por COUG + CONTA para que SIGGO e SISGEPAT se conciliem
+# conta a conta (124110100 vs 124110200).
 SQL = """{de_para},
 cougs_direta AS (
     SELECT TO_NUMBER(COUG) COUG_NUM FROM de_para
 ),
-subitem_desc AS (
-    -- Descritivos de todos os subitens, independente de localização
-    SELECT LPAD(TP_CODIGO, 2, '0') AS SUBITEM, MIN(TP_DESCRICAO) AS DESC_SUBITEM
-    FROM SIGGO.PAT_BENSMOVEIS
-    WHERE TP_DESCRICAO IS NOT NULL
-    GROUP BY TP_CODIGO
+contas_info AS (
+    SELECT TO_CHAR(COCONTACONTABIL) AS CONTA, TRIM(NOCONTACONTABIL) AS NOCONTA
+    FROM MIL2026.VCONTACONTABIL
+    WHERE COCONTACONTABIL IN (124110100, 124110200)
 ),
 sisgepat AS (
-    -- Guarda física (LO_CODIGO) → COUG via de_para; MO_VALORATUAL em centavos ÷ 100
     SELECT
-        LPAD(dp.COUG, 6, '0')                 AS COUG,
-        LPAD(bm.TP_CODIGO, 2, '0')            AS SUBITEM,
-        MIN(bm.TP_DESCRICAO)                  AS DESC_SUBITEM,
+        LPAD(dp.COUG, 6, '0') AS COUG,
+        CASE TO_NUMBER(bm.TP_CODIGO)
+            WHEN 8  THEN '124110100'
+            WHEN 25 THEN '124110200'
+            WHEN 26 THEN '124110200'
+        END AS CONTA,
         ROUND(SUM(bm.MO_VALORATUAL) / 100, 2) AS SALDO_SISGEPAT
     FROM SIGGO.PAT_BENSMOVEIS bm
     JOIN de_para dp ON SUBSTR(bm.LO_CODIGO, 1, 3) = dp.LO3
-    WHERE bm.EL_CODIGO = '52'
+    WHERE bm.EL_CODIGO = '40'
+      AND TO_NUMBER(bm.TP_CODIGO) IN (8, 25, 26)
       AND bm.MO_DTINCORPORACAO IS NOT NULL
       AND bm.MO_DTINCORPORACAO < :data_corte
       AND bm.MO_DTAQUISICAO IS NOT NULL
       AND bm.MO_DTAQUISICAO < :data_corte
-    GROUP BY dp.COUG, bm.TP_CODIGO
+    GROUP BY dp.COUG,
+        CASE TO_NUMBER(bm.TP_CODIGO)
+            WHEN 8  THEN '124110100'
+            WHEN 25 THEN '124110200'
+            WHEN 26 THEN '124110200'
+        END
 ),
 siggo AS (
     SELECT
-        LPAD(TO_CHAR(v.COUG), 6, '0')                          AS COUG,
-        LPAD(SUBSTR(TO_CHAR(v.COCONTACONTABIL), -2), 2, '0')   AS SUBITEM,
-        ROUND(SUM(CASE
-            WHEN v.COCONTACONTABIL BETWEEN 123110100 AND 123110199
-            THEN v.VADEBITO - v.VACREDITO ELSE 0 END), 2)      AS BENS_MOVEIS,
-        ROUND(SUM(CASE
-            WHEN v.COCONTACONTABIL BETWEEN 123110800 AND 123110899
-            THEN v.VADEBITO - v.VACREDITO ELSE 0 END), 2)      AS BENS_MOVEIS_ALMOX,
-        ROUND(SUM(CASE
-            WHEN v.COCONTACONTABIL BETWEEN 123111800 AND 123111899
-            THEN v.VADEBITO - v.VACREDITO ELSE 0 END), 2)      AS BENS_MOVEIS_IMPORT
+        LPAD(TO_CHAR(v.COUG), 6, '0')  AS COUG,
+        TO_CHAR(v.COCONTACONTABIL)      AS CONTA,
+        ROUND(SUM(v.VADEBITO - v.VACREDITO), 2) AS TOTAL_SIGGO
     FROM MIL2026.VSALDOCONTABIL v
     WHERE v.INMES <= :mes
-      AND (  v.COCONTACONTABIL BETWEEN 123110100 AND 123110199
-          OR v.COCONTACONTABIL BETWEEN 123110800 AND 123110899
-          OR v.COCONTACONTABIL BETWEEN 123111800 AND 123111899)
+      AND v.COCONTACONTABIL IN (124110100, 124110200)
       AND v.COUG IN (SELECT COUG_NUM FROM cougs_direta)
-    GROUP BY v.COUG, SUBSTR(TO_CHAR(v.COCONTACONTABIL), -2)
-),
-conta_names AS (
-    -- Nome da conta contábil no SIGGO, usado como fallback quando TP_DESCRICAO é nulo
-    SELECT
-        LPAD(SUBSTR(TO_CHAR(COCONTACONTABIL), -2), 2, '0') AS SUBITEM,
-        MIN(TRIM(NOCONTACONTABIL)) AS NOME_CONTA
-    FROM MIL2026.VCONTACONTABIL
-    WHERE COCONTACONTABIL BETWEEN 123110100 AND 123110199
-       OR COCONTACONTABIL BETWEEN 123110800 AND 123110899
-       OR COCONTACONTABIL BETWEEN 123111800 AND 123111899
-    GROUP BY SUBSTR(TO_CHAR(COCONTACONTABIL), -2)
+    GROUP BY v.COUG, v.COCONTACONTABIL
 )
 SELECT
-    NVL(si.COUG,         sg.COUG)    AS COUG,
-    TRIM(ug.NOUG)                    AS NOUG,
-    NVL(si.SUBITEM,      sg.SUBITEM) AS SUBITEM,
-    NVL(si.DESC_SUBITEM, NVL(sd.DESC_SUBITEM, '')) AS DESC_SUBITEM,
-    cn.NOME_CONTA                    AS NOME_CONTA,
-    NVL(sg.BENS_MOVEIS,       0)     AS BENS_MOVEIS,
-    NVL(sg.BENS_MOVEIS_ALMOX, 0)     AS BENS_MOVEIS_ALMOX,
-    NVL(sg.BENS_MOVEIS_IMPORT,0)     AS BENS_MOVEIS_IMPORT,
-    ROUND(
-        NVL(sg.BENS_MOVEIS,0) + NVL(sg.BENS_MOVEIS_ALMOX,0) + NVL(sg.BENS_MOVEIS_IMPORT,0)
-    , 2)                              AS TOTAL_SIGGO,
-    NVL(si.SALDO_SISGEPAT, 0)        AS SALDO_SISGEPAT,
-    ROUND(
-        NVL(sg.BENS_MOVEIS,0) + NVL(sg.BENS_MOVEIS_ALMOX,0) + NVL(sg.BENS_MOVEIS_IMPORT,0)
-        - NVL(si.SALDO_SISGEPAT, 0)
-    , 2)                              AS DIFERENCA
+    NVL(si.COUG,  sg.COUG)  AS COUG,
+    TRIM(ug.NOUG)            AS NOUG,
+    NVL(si.CONTA, sg.CONTA)  AS CONTA,
+    ci.NOCONTA               AS NOCONTA,
+    NVL(sg.TOTAL_SIGGO,  0)  AS TOTAL_SIGGO,
+    NVL(si.SALDO_SISGEPAT, 0) AS SALDO_SISGEPAT,
+    ROUND(NVL(sg.TOTAL_SIGGO, 0) - NVL(si.SALDO_SISGEPAT, 0), 2) AS DIFERENCA
 FROM sisgepat si
 FULL OUTER JOIN siggo sg
-    ON si.COUG = sg.COUG AND si.SUBITEM = sg.SUBITEM
+    ON si.COUG = sg.COUG AND si.CONTA = sg.CONTA
 LEFT JOIN MIL2026.VUNIDADEGESTORA ug
     ON ug.COUG = TO_NUMBER(NVL(si.COUG, sg.COUG))
-LEFT JOIN subitem_desc sd
-    ON sd.SUBITEM = NVL(si.SUBITEM, sg.SUBITEM)
-LEFT JOIN conta_names cn
-    ON cn.SUBITEM = NVL(si.SUBITEM, sg.SUBITEM)
-ORDER BY NVL(si.COUG, sg.COUG), NVL(si.SUBITEM, sg.SUBITEM)
+LEFT JOIN contas_info ci
+    ON ci.CONTA = NVL(si.CONTA, sg.CONTA)
+ORDER BY NVL(si.COUG, sg.COUG), NVL(si.CONTA, sg.CONTA)
 """
 
 
@@ -209,29 +165,15 @@ def extrair(mes, ano):
     df = pd.read_sql(sql_final, conn, params={"mes": mes, "data_corte": data_corte})
     conn.close()
 
-    for col in ["BENS_MOVEIS", "BENS_MOVEIS_ALMOX", "BENS_MOVEIS_IMPORT",
-                "TOTAL_SIGGO", "SALDO_SISGEPAT", "DIFERENCA"]:
+    for col in ["TOTAL_SIGGO", "SALDO_SISGEPAT", "DIFERENCA"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).round(2)
 
-    df["COUG"]         = df["COUG"].astype(str).str.zfill(6)
-    df["SUBITEM"]      = df["SUBITEM"].astype(str).str.zfill(2)
-    df["NOUG"]         = df["NOUG"].fillna("(sem nome)")
-    df["DESC_SUBITEM"] = df["DESC_SUBITEM"].fillna("")
-    df["NOME_CONTA"]   = df["NOME_CONTA"].fillna("")
+    df["COUG"]    = df["COUG"].astype(str).str.zfill(6)
+    df["CONTA"]   = df["CONTA"].astype(str)
+    df["NOUG"]    = df["NOUG"].fillna("(sem nome)")
+    df["NOCONTA"] = df["NOCONTA"].fillna("")
 
-    # Fallback para subitems sem TP_DESCRICAO:
-    # 1º) dict fixo para casos extintos ou inexistentes no VCONTACONTABIL
-    # 2º) nome automático do VCONTACONTABIL (via conta_names CTE), com title case
-    def _resolve_desc(r):
-        if str(r["DESC_SUBITEM"]).strip():
-            return r["DESC_SUBITEM"]
-        if r["SUBITEM"] in _SUBITEM_FIXO:
-            return _SUBITEM_FIXO[r["SUBITEM"]]
-        return title_case_pt(str(r["NOME_CONTA"])) if str(r["NOME_CONTA"]).strip() else ""
-
-    df["DESC_SUBITEM"] = df.apply(_resolve_desc, axis=1)
-
-    # Remove linhas em que SIGGO e SISGEPAT são ambos zero (saldo nulo sem utilidade analítica)
+    # Remove linhas em que SIGGO e SISGEPAT são ambos zero
     df = df[(df["TOTAL_SIGGO"].abs() > 0.005) | (df["SALDO_SISGEPAT"].abs() > 0.005)]
 
     print(f"  {len(df)} linhas retornadas.")
@@ -252,24 +194,21 @@ def gerar_html(df, mes, ano, data_corte):
     registros = []
     for r in df.itertuples(index=False):
         registros.append({
-            "COUG":              str(r.COUG),
-            "NOUG":              str(r.NOUG),
-            "SUBITEM":           str(r.SUBITEM),
-            "DESC_SUBITEM":      str(r.DESC_SUBITEM),
-            "BENS_MOVEIS":       float(r.BENS_MOVEIS),
-            "BENS_MOVEIS_ALMOX": float(r.BENS_MOVEIS_ALMOX),
-            "BENS_MOVEIS_IMPORT":float(r.BENS_MOVEIS_IMPORT),
-            "TOTAL_SIGGO":       float(r.TOTAL_SIGGO),
-            "SALDO_SISGEPAT":    float(r.SALDO_SISGEPAT),
-            "DIFERENCA":         float(r.DIFERENCA),
+            "COUG":           str(r.COUG),
+            "NOUG":           str(r.NOUG),
+            "CONTA":          str(r.CONTA),
+            "NOCONTA":        str(r.NOCONTA),
+            "TOTAL_SIGGO":    float(r.TOTAL_SIGGO),
+            "SALDO_SISGEPAT": float(r.SALDO_SISGEPAT),
+            "DIFERENCA":      float(r.DIFERENCA),
         })
 
     meta = {
-        "mes_label": MESES[mes],
-        "mes_num":   mes,
-        "ano":       ano,
-        "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "data_corte":data_corte.strftime("%d/%m/%Y"),
+        "mes_label":  MESES[mes],
+        "mes_num":    mes,
+        "ano":        ano,
+        "gerado_em":  datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "data_corte": data_corte.strftime("%d/%m/%Y"),
     }
 
     def b64gz(obj):
@@ -285,7 +224,7 @@ def gerar_html(df, mes, ano, data_corte):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Conciliação SIGGO e SISGEPAT - Bens Móveis</title>
+<title>Conciliação SIGGO e SISGEPAT - Bens Intangíveis</title>
 <style>
 *,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
 :root{{--navy:#0d1b3e;--navy-mid:#162550;--navy-light:#1e3267;--teal:#0090a8;--teal-light:#00b8d4;--surface:#fff;--bg:#f2f5f9;--border:#dce3ed;--row-alt:#f7f9fc;--hover:#eaf4f7;--text:#1a2033;--muted:#6b7a99;--red:#c0392b;--green:#1a7a44;--radius:10px;--shadow:0 2px 12px rgba(13,27,62,.10)}}
@@ -333,22 +272,22 @@ header h1 span{{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-
 .sw input:focus{{outline:none;border-color:var(--navy)}}
 .sw input::placeholder{{color:var(--teal);font-weight:500}}
 .tw{{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto}}
-table{{width:100%;border-collapse:collapse;min-width:900px}}
-thead th{{background:var(--navy);color:#c8d8ec;padding:10px 10px 4px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;letter-spacing:.3px;vertical-align:bottom}}
+table{{width:100%;border-collapse:collapse;min-width:600px}}
+thead th{{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;letter-spacing:.3px;vertical-align:bottom}}
 thead th.right{{text-align:right}}
 thead th .sub{{display:block;font-size:9px;font-weight:400;opacity:.7;margin-top:2px;letter-spacing:0}}
 tbody tr{{transition:background .1s}}
 tbody tr:hover td{{background:var(--hover)!important}}
-td{{padding:8px 10px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}}
+td{{padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}}
 td.right{{text-align:right}}
 .vneg{{color:var(--red);font-weight:700}}
 .vpos{{color:var(--green);font-weight:700}}
-tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);padding:10px 10px;font-size:12.5px}}
+tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px}}
 .empty{{text-align:center;padding:56px;color:var(--muted)}}
 tr.grp-l1{{background:var(--navy);cursor:pointer}}
-tr.grp-l1 td{{color:#e8f0fc;font-weight:700;padding:9px 10px}}
+tr.grp-l1 td{{color:#e8f0fc;font-weight:700;padding:9px 14px}}
 tr.grp-l1:hover td{{background:var(--navy-mid)!important}}
-tr.grp-l2 td{{padding:7px 10px 7px 24px;background:var(--surface)}}
+tr.grp-l2 td{{padding:8px 14px 8px 28px;background:var(--surface)}}
 tr.grp-l2:nth-child(even) td{{background:var(--row-alt)}}
 tr.grp-l2:hover td{{background:var(--hover)!important}}
 .tog{{margin-right:6px;font-style:normal;display:inline-block;width:12px}}
@@ -357,8 +296,8 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
 <body>
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">&#x1F6CB;</div>
-    <h1>Concilia&#231;&#227;o SIGGO e SISGEPAT &#8212; Bens M&#243;veis
+    <div class="hlogo">&#x1F4BB;</div>
+    <h1>Concilia&#231;&#227;o SIGGO e SISGEPAT &#8212; Bens Intang&#237;veis
       <span>SIGGO &middot; Ano Exerc&#237;cio 2026</span>
     </h1>
     <a class="voltar" href="index.html">&#8592; Painel inicial</a>
@@ -377,11 +316,11 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
       <div class="ac-dd" id="fu-dd"></div>
     </div>
   </div>
-  <div class="fg"><label>Subitem</label>
-    <div class="ac-wrap" style="min-width:260px">
-      <input id="fs-input" class="ac-input" type="text" placeholder="C&#243;digo ou descri&#231;&#227;o..." autocomplete="off" oninput="onAC('s')" onfocus="onAC('s')" onblur="offAC('s')">
-      <button class="ac-clear" id="fs-clear" onclick="limAC('s')" title="Limpar">&#x2715;</button>
-      <div class="ac-dd" id="fs-dd"></div>
+  <div class="fg"><label>Conta Cont&#225;bil</label>
+    <div class="ac-wrap" style="min-width:300px">
+      <input id="fc-input" class="ac-input" type="text" placeholder="C&#243;digo ou nome..." autocomplete="off" oninput="onAC('c')" onfocus="onAC('c')" onblur="offAC('c')">
+      <button class="ac-clear" id="fc-clear" onclick="limAC('c')" title="Limpar">&#x2715;</button>
+      <div class="ac-dd" id="fc-dd"></div>
     </div>
   </div>
   <div class="bgrp">
@@ -399,12 +338,9 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
   </div>
   <div class="tw"><table>
     <thead><tr>
-      <th>Unidade Gestora / Subitem</th>
-      <th class="right">Bens M&#243;veis<span class="sub">1231101XX</span></th>
-      <th class="right">Almox.<span class="sub">1231108XX</span></th>
-      <th class="right">Import.<span class="sub">1231118XX</span></th>
-      <th class="right">SIGGO</th>
-      <th class="right">SISGEPAT</th>
+      <th>Unidade Gestora / Conta Cont&#225;bil</th>
+      <th class="right">SIGGO<span class="sub">124XXXXXX</span></th>
+      <th class="right">SISGEPAT<span class="sub">Elemento de Despesa 40</span></th>
       <th class="right">Diverg&#234;ncia</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
@@ -427,61 +363,56 @@ function offAC(k){{setTimeout(()=>document.getElementById(acState[k].dd).style.d
 function selAC(k,c,label){{const st=acState[k];st.sel=c;document.getElementById(st.inp).value=label;document.getElementById(st.dd).style.display='none';document.getElementById(st.clr).style.display='block';aplicar();}}
 function limAC(k){{const st=acState[k];st.sel='';document.getElementById(st.inp).value='';document.getElementById(st.clr).style.display='none';aplicar();}}
 let _somenteDif=false;
-function aplicar(){{const b=document.getElementById('busca').value.trim().toLowerCase();fil=ALL.filter(r=>{{if(acState['u'].sel&&r.COUG!==acState['u'].sel)return false;if(acState['s'].sel&&r.SUBITEM!==acState['s'].sel)return false;if(_somenteDif&&Math.abs(r.DIFERENCA||0)<0.005)return false;if(b&&!(r.UG_LABEL||'').toLowerCase().includes(b)&&!(r.SUB_LABEL||'').toLowerCase().includes(b))return false;return true;}});render();}}
+function aplicar(){{const b=document.getElementById('busca').value.trim().toLowerCase();fil=ALL.filter(r=>{{if(acState['u'].sel&&r.COUG!==acState['u'].sel)return false;if(acState['c'].sel&&r.CONTA!==acState['c'].sel)return false;if(_somenteDif&&Math.abs(r.DIFERENCA||0)<0.005)return false;if(b&&!(r.UG_LABEL||'').toLowerCase().includes(b)&&!(r.CONTA_LABEL||'').toLowerCase().includes(b))return false;return true;}});render();}}
 function toggleDif(){{_somenteDif=!_somenteDif;const btn=document.getElementById('btn-dif');btn.style.filter=_somenteDif?'brightness(0.75)':'';btn.style.boxShadow=_somenteDif?'inset 0 2px 5px rgba(0,0,0,.35)':'';aplicar();}}
 function expandAll(){{document.querySelectorAll('tr.grp-l1').forEach(r=>{{const id=r.dataset.id;if(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(c=>c.style.display='');r.querySelector('.tog').innerHTML='&#9660;';}}}});}}
 function collapseAll(){{document.querySelectorAll('tr.grp-l2').forEach(r=>r.style.display='none');document.querySelectorAll('.tog').forEach(t=>t.innerHTML='&#9654;');}}
-function limpar(){{document.getElementById('busca').value='';['u','s'].forEach(k=>limAC(k));_somenteDif=false;const b=document.getElementById('btn-dif');b.style.filter='';b.style.boxShadow='';aplicar();}}
+function limpar(){{document.getElementById('busca').value='';['u','c'].forEach(k=>limAC(k));_somenteDif=false;const b=document.getElementById('btn-dif');b.style.filter='';b.style.boxShadow='';aplicar();}}
 function renderKPIs(){{
-  const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
   const totSIG=fil.reduce((a,r)=>a+(r.TOTAL_SIGGO||0),0);
+  const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
   const totDIF=fil.reduce((a,r)=>a+(r.DIFERENCA||0),0);
   document.getElementById('kv-sig').textContent=brl(totSIG);
   document.getElementById('kv-sis').textContent=brl(totSIS);
   document.getElementById('kv-dif').innerHTML=vcls(totDIF);
-  document.getElementById('ks-sig').innerHTML='Contas cont&aacute;beis 1231101XX, 1231108XX e 1231118XX';
-  document.getElementById('ks-sis').innerHTML='Elemento de Despesa 52 &mdash; Equipamentos e Material Permanente';
-  document.getElementById('ks-dif').innerHTML='SIGGO &minus; SISGEPAT';
+  document.getElementById('ks-sig').innerHTML='Contas cont&aacute;beis 124XXXXXX &mdash; Bens Intang&iacute;veis';
+  document.getElementById('ks-sis').innerHTML='Elemento de Despesa 40 &mdash; Servi&ccedil;o de Tecnologia da Informa&ccedil;&atilde;o e Comunica&ccedil;&atilde;o';
+  document.getElementById('ks-dif').innerHTML='SIGGO &minus; SISGEPAT &mdash; diferen&ccedil;a a ser analisada e regularizada';
   document.getElementById('kpi-dif').classList.toggle('ka',Math.abs(totDIF)>=0.01);
 }}
 function render(){{
   renderKPIs();
   const tb=document.getElementById('tbody'),tf=document.getElementById('tfoot');
-  const totBM=fil.reduce((a,r)=>a+(r.BENS_MOVEIS||0),0);
-  const totAL=fil.reduce((a,r)=>a+(r.BENS_MOVEIS_ALMOX||0),0);
-  const totIM=fil.reduce((a,r)=>a+(r.BENS_MOVEIS_IMPORT||0),0);
   const totSIG=fil.reduce((a,r)=>a+(r.TOTAL_SIGGO||0),0);
   const totSIS=fil.reduce((a,r)=>a+(r.SALDO_SISGEPAT||0),0);
   const totDIF=fil.reduce((a,r)=>a+(r.DIFERENCA||0),0);
   document.getElementById('cnt').textContent=fil.length.toLocaleString('pt-BR')+' linha'+(fil.length!==1?'s':'');
-  if(!fil.length){{tb.innerHTML='<tr><td colspan="7" class="empty">Nenhum registro encontrado.</td></tr>';tf.innerHTML='';return;}}
+  if(!fil.length){{tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro encontrado.</td></tr>';tf.innerHTML='';return;}}
   const tree={{}};
   fil.forEach(r=>{{
-    const u=r.COUG,s=r.SUBITEM;
-    if(!tree[u])tree[u]={{bm:0,al:0,im:0,sig:0,sis:0,dif:0,lbl:r.UG_LABEL,ch:{{}}}};
-    if(!tree[u].ch[s])tree[u].ch[s]={{bm:0,al:0,im:0,sig:0,sis:0,dif:0,lbl:r.SUB_LABEL}};
-    tree[u].ch[s].bm+=r.BENS_MOVEIS||0;tree[u].ch[s].al+=r.BENS_MOVEIS_ALMOX||0;tree[u].ch[s].im+=r.BENS_MOVEIS_IMPORT||0;
-    tree[u].ch[s].sig+=r.TOTAL_SIGGO||0;tree[u].ch[s].sis+=r.SALDO_SISGEPAT||0;tree[u].ch[s].dif+=r.DIFERENCA||0;
-    tree[u].bm+=r.BENS_MOVEIS||0;tree[u].al+=r.BENS_MOVEIS_ALMOX||0;tree[u].im+=r.BENS_MOVEIS_IMPORT||0;
+    const u=r.COUG,co=r.CONTA;
+    if(!tree[u])tree[u]={{sig:0,sis:0,dif:0,lbl:r.UG_LABEL,ch:{{}}}};
+    if(!tree[u].ch[co])tree[u].ch[co]={{sig:0,sis:0,dif:0,lbl:r.CONTA_LABEL}};
+    tree[u].ch[co].sig+=r.TOTAL_SIGGO||0;tree[u].ch[co].sis+=r.SALDO_SISGEPAT||0;tree[u].ch[co].dif+=r.DIFERENCA||0;
     tree[u].sig+=r.TOTAL_SIGGO||0;tree[u].sis+=r.SALDO_SISGEPAT||0;tree[u].dif+=r.DIFERENCA||0;
   }});
   let html='',idx=0;
   const srt=o=>Object.keys(o).sort((a,b)=>a.localeCompare(b,'pt-BR'));
   srt(tree).forEach(u=>{{const uid='r'+(idx++),uN=tree[u];
-    html+='<tr class="grp-l1" data-id="'+uid+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.bm)+'</td><td class="right">'+brl(uN.al)+'</td><td class="right">'+brl(uN.im)+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';
-    srt(uN.ch).forEach(s=>{{const sN=uN.ch[s];
-      html+='<tr class="grp-l2" data-p="'+uid+'" style="display:none"><td>'+sN.lbl+'</td><td class="right">'+brl(sN.bm)+'</td><td class="right">'+brl(sN.al)+'</td><td class="right">'+brl(sN.im)+'</td><td class="right">'+brl(sN.sig)+'</td><td class="right">'+brl(sN.sis)+'</td><td class="right">'+vcls(sN.dif)+'</td></tr>';
+    html+='<tr class="grp-l1" data-id="'+uid+'" onclick="tog(this.dataset.id)"><td><span class="tog">&#9654;</span>'+uN.lbl+'</td><td class="right">'+brl(uN.sig)+'</td><td class="right">'+brl(uN.sis)+'</td><td class="right">'+vcls(uN.dif)+'</td></tr>';
+    srt(uN.ch).forEach(co=>{{const coN=uN.ch[co];
+      html+='<tr class="grp-l2" data-p="'+uid+'" style="display:none"><td>'+coN.lbl+'</td><td class="right">'+brl(coN.sig)+'</td><td class="right">'+brl(coN.sis)+'</td><td class="right">'+vcls(coN.dif)+'</td></tr>';
     }});
   }});
   tb.innerHTML=html;
-  tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totBM)+'</td><td class="right">'+brl(totAL)+'</td><td class="right">'+brl(totIM)+'</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
+  tf.innerHTML='<tr><td>Total geral ('+fil.length.toLocaleString('pt-BR')+' linhas)</td><td class="right">'+brl(totSIG)+'</td><td class="right">'+brl(totSIS)+'</td><td class="right">'+vcls(totDIF)+'</td></tr>';
 }}
 function tog(id){{const row=document.querySelector('tr[data-id="'+id+'"]');const togEl=row.querySelector('.tog');const exp=togEl.innerHTML==='&#9660;'||togEl.textContent==='▼';if(exp){{collapseDesc(id);togEl.innerHTML='&#9654;';}}else{{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{r.style.display='';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});togEl.innerHTML='&#9660;';}}}}
 function collapseDesc(id){{document.querySelectorAll('tr[data-p="'+id+'"]').forEach(r=>{{const cid=r.getAttribute('data-id');if(cid)collapseDesc(cid);r.style.display='none';const t=r.querySelector('.tog');if(t)t.innerHTML='&#9654;';}});}}
-function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['COUG','Unidade Gestora','Subitem','Descricao Subitem','Bens Moveis','Almox','Importados','Total SIGGO','SISGEPAT','Divergencia'];const keys=['COUG','NOUG','SUBITEM','DESC_SUBITEM','BENS_MOVEIS','BENS_MOVEIS_ALMOX','BENS_MOVEIS_IMPORT','TOTAL_SIGGO','SALDO_SISGEPAT','DIFERENCA'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_bens_moveis_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
+function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');const hdrs=['COUG','Unidade Gestora','Conta','Nome Conta','SIGGO','SISGEPAT','Divergencia'];const keys=['COUG','NOUG','CONTA','NOCONTA','TOTAL_SIGGO','SALDO_SISGEPAT','DIFERENCA'];const cel=v=>{{if(typeof v==='number')return String(v).replace('.',',');const s=(v||'').toString().trim();return /^\\d+$/.test(s)?'"'+s+'"':s;}};const csv=[hdrs.join(';'),...fil.map(r=>keys.map(k=>cel(r[k])).join(';'))].join('\\n');const a=Object.assign(document.createElement('a'),{{href:URL.createObjectURL(new Blob(['\\uFEFF'+csv],{{type:'text/csv;charset=utf-8'}})),download:'conciliacao_bens_intangiveis_sisgepat.csv'}});a.click();URL.revokeObjectURL(a.href);}}
 (async()=>{{
   const [meta,quadro]=await Promise.all([decomp(B64_META),decomp(B64_QUADRO)]);
-  quadro.forEach(r=>{{r.UG_LABEL=r.COUG+(r.NOUG?' - '+r.NOUG:'');r.SUB_LABEL=r.SUBITEM+(r.DESC_SUBITEM?' - '+r.DESC_SUBITEM:'');}});
+  quadro.forEach(r=>{{r.UG_LABEL=r.COUG+(r.NOUG?' - '+r.NOUG:'');r.CONTA_LABEL=r.CONTA+(r.NOCONTA?' - '+r.NOCONTA:'');}});
   ALL=quadro;
   document.getElementById('ts').textContent='Gerado em: '+meta.gerado_em;
   document.getElementById('krow').innerHTML=
@@ -491,7 +422,7 @@ function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');c
   document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
   acState={{
     'u':{{sel:'',list:buildList(r=>r.COUG,r=>r.UG_LABEL),inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}},
-    's':{{sel:'',list:buildList(r=>r.SUBITEM,r=>r.SUB_LABEL),inp:'fs-input',clr:'fs-clear',dd:'fs-dd'}}
+    'c':{{sel:'',list:buildList(r=>r.CONTA,r=>r.CONTA_LABEL),inp:'fc-input',clr:'fc-clear',dd:'fc-dd'}}
   }};
   aplicar();
 }})();
@@ -517,7 +448,7 @@ def publicar(html, no_push):
 
     subprocess.run(["git", "-C", str(PASTA), "add", ARQUIVO_HTML], check=True)
     subprocess.run(["git", "-C", str(PASTA), "commit", "-m",
-                    f"auto: atualiza conciliacao_bens_moveis_sisgepat.html"], check=True)
+                    f"auto: atualiza conciliacao_bens_intangiveis_sisgepat.html"], check=True)
     subprocess.run(["git", "-C", str(PASTA), "push", "origin", GITHUB_BRANCH], check=True)
     print(f"  Publicado: https://{GITHUB_USER}.github.io/{GITHUB_REPO}/{ARQUIVO_HTML}")
 
@@ -532,7 +463,7 @@ def main():
     ap.add_argument("--no-push", action="store_true")
     a = ap.parse_args()
 
-    print(f"[{datetime.now():%H:%M:%S}] Conciliação Bens Móveis SIGGO × SISGEPAT ({MESES[a.mes]}/{a.ano})...")
+    print(f"[{datetime.now():%H:%M:%S}] Conciliação Bens Intangíveis SIGGO × SISGEPAT ({MESES[a.mes]}/{a.ano})...")
     df, mes, ano, data_corte = extrair(a.mes, a.ano)
     print(f"[{datetime.now():%H:%M:%S}] Gerando HTML...")
     html = gerar_html(df, mes, ano, data_corte)
