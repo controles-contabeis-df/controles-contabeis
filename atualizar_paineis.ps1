@@ -53,6 +53,8 @@ Executar-Script "extrair_intra_lancamento.py"
 Executar-Script "extrair_conciliacao_bens_imoveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_moveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_intangiveis_sisgepat.py"
+Executar-Script "extrair_correspondencia_ativo_passivo.py"
+Executar-Script "extrair_correspondencia_ativo_passivo_saldo.py"
 
 $env:NO_GIT_PUSH = ""
 
