@@ -101,7 +101,7 @@ tfoot tr td.left{text-align:left}
     </h1>
     <a class="voltar" href="index.html">&#8592; Painel inicial</a>
   </div>
-  <span id="ts">24/08/2026 15:25:04</span>
+  <span id="ts">24/08/2026 15:59:48</span>
 </header>
 
 <div class="fbar">
@@ -149,7 +149,7 @@ tfoot tr td.left{text-align:left}
   <table>
     <thead><tr>
       <th class="left" style="min-width:340px">Equa&#231;&#227;o / Conta Cont&#225;bil</th>
-      <th class="left" style="min-width:160px">Per&#237;odo</th>
+      <th class="left" style="min-width:120px">M&#234;s</th>
       <th style="width:195px">Ativo</th>
       <th style="width:195px">Passivo</th>
       <th style="width:160px">Diverg&#234;ncia</th>
@@ -161,7 +161,7 @@ tfoot tr td.left{text-align:left}
 
 <script>
 const EQUACOES=[{"id": "EQ1", "desc": "21142XXXX = 113620101 + 113620103", "passivo_exact": [], "passivo_prefix": "21142", "ativo": [113620101, 113620103]}, {"id": "EQ2", "desc": "218820101 = 113620102 + 113620104", "passivo_exact": [218820101], "passivo_prefix": null, "ativo": [113620102, 113620104]}, {"id": "EQ3", "desc": "218820104 = 112120101", "passivo_exact": [218820104], "passivo_prefix": null, "ativo": [112120101]}, {"id": "EQ4", "desc": "218820107 = 112120104", "passivo_exact": [218820107], "passivo_prefix": null, "ativo": [112120104]}, {"id": "EQ5", "desc": "214320100 + 214325100 + 218820108 + 218827005 = 112120107", "passivo_exact": [214320100, 214325100, 218820108, 218827005], "passivo_prefix": null, "ativo": [112120107]}, {"id": "EQ6", "desc": "218924019 = 112322200", "passivo_exact": [218924019], "passivo_prefix": null, "ativo": [112322200]}, {"id": "EQ7", "desc": "113220700 + 112920101 = 0", "passivo_exact": [], "passivo_prefix": null, "ativo": [113220700, 112920101]}];
-const CONTA_NAMES={"112120101": "IMPOSTO SOBRE A RENDA E PROVENTOS DE QUALQUER NATUREZA", "112120104": "ICMS", "112120107": "ISS", "112322200": "RECURSOS A RECEBER - DREM", "112920101": "(-) PERDAS ESTIMADAS EM IMPOSTOS", "113220700": "ISS A COMPENSAR", "113620101": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM CAPITALIZAÇÃO", "113620102": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "113620103": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM REPARTIÇÃO", "113620104": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "214320100": "ISS A RECOLHER", "214325100": "ISS A RECOLHER (P)", "218820101": "RPPS - RETENÇÕES SOBRE VENCIMENTOS E VANTAGENS", "218820104": "IMPOSTO SOBRE A RENDA RETIDO NA FONTE - IRRF", "218820107": "ICMS", "218820108": "ISS", "218827005": "IMPOSTO S/ SERVIÇOS A RECOLHER - EMPRESAS", "218924019": "RECURSOS A DEVOLVER - DREM"};
+const CONTA_NAMES={"211427100": "CONTRIBUIÇÃO A REGIME PRÓPRIO DE PREV.(RPPS) DO ENTE(P - COMPETÊNCIA)", "211420100": "CONTRIBUIÇÃO A REGIME PRÓPRIO DE PREVIDÊNCIA (RPPS)", "211425100": "CONTRIBUIÇÃO A REGIME PRÓPRIO DE PREVIDÊNCIA (RPPS) DO ENTE (P)", "218820108": "ISS", "112120107": "ISS", "113220700": "ISS A COMPENSAR", "214320100": "ISS A RECOLHER", "214325100": "ISS A RECOLHER (P)", "211420200": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS", "211425200": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS (P)", "211427200": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS (P- COMPETÊNCI", "218827005": "IMPOSTO S/ SERVIÇOS A RECOLHER - EMPRESAS", "112120101": "IMPOSTO SOBRE A RENDA E PROVENTOS DE QUALQUER NATUREZA", "218820104": "IMPOSTO SOBRE A RENDA RETIDO NA FONTE - IRRF", "218924019": "RECURSOS A DEVOLVER - DREM", "218820107": "ICMS", "112120104": "ICMS", "112920101": "(-) PERDAS ESTIMADAS EM IMPOSTOS", "211420000": "ENCARGOS SOCIAIS A PAGAR-INTRA OFSS", "112322200": "RECURSOS A RECEBER - DREM", "113620101": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM CAPITALIZAÇÃO", "113620103": "CONTRIBUIÇÕES DO RPPS A RECEBER - PATRONAL - FUNDO EM REPARTIÇÃO", "113620104": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "113620102": "CONTRIBUIÇÕES DO RPPS A RECEBER - SERVIDOR, APOSENTADO E PENSIONISTA -", "211425201": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS - PATRONAL (P)", "211420201": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS - PATRONAL - C", "211427201": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS - PATRONAL - C", "211427202": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS - SERVIDOR, AP", "211420202": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS - SERVIDOR, AP", "211425202": "CONTRIBUIÇÃO PREVIDENCIÁRIA - RPPS - DÉBITOS PARCELADOS -SERVIDOR (P)", "211420300": "CONTRIBUIÇÃO SUPLEMENTAR  AO RPPS - FUNDO EM CAPITALIZAÇÃO", "211427300": "CONTRIBUIÇÃO SUPLEMENTAR  AO RPPS - FUNDO EM CAPITALIZAÇÃO (P - COMPET", "211425300": "CONTRIBUIÇÃO SUPLEMENTAR  AO RPPS - FUNDO EM CAPITALIZAÇÃO (P)", "211429900": "OUTROS ENCARGOS SOCIAIS", "211425900": "OUTROS ENCARGOS SOCIAIS  (P)", "218820101": "RPPS - RETENÇÕES SOBRE VENCIMENTOS E VANTAGENS"};
 const MESES_PT={0:'Saldo Inicial',1:'Janeiro',2:'Fevereiro',3:'Mar\u00e7o',4:'Abril',5:'Maio',6:'Junho',
                 7:'Julho',8:'Agosto',9:'Setembro',10:'Outubro',11:'Novembro',12:'Dezembro'};
 const EQ_COLORS=['var(--red)','var(--amber)','#2e7d32','#5e35b1','#e65100','#00695c','#880e4f'];
@@ -173,7 +173,7 @@ function decomp(b64){
   const w=ds.writable.getWriter();w.write(buf);w.close();
   return new Response(ds.readable).text();
 }
-decomp('H4sIAAAAAAAC/22WP48cNwzFv8vUu4L4T6TSOU4KAxdf4SCNcVVaAwaSIkWQ756n0eycON7mcDu/kYZ6fCT17/bn929/bz993T59/u3XL9tt+/j68fXz7x/2Pz9/esGTP16+fHj55XV7u21/ff9nvPy13jYiJq5Uabsx1W4uRMXj7bZC3W7NrUpRzsC3m7JUEi+9n6gfG965hhRvDyDM1WvFly7P27FAyE1ql8KeGW83wj9m0kulzGTsh2967b3wZVNEjjcC0XIUlQmZSAcckYg2qW692Apth9I6S6nxABFHnETd8ROriDLU/XDByo5gLitjuwU2Fiq6AChiWKVUaLxPKSf3HtGjS0xJKOWEJKzE5bnvujtOX4Qe6FT4TsahPerMMSWJ7wBW2YprZjICqdSkVyvaMtQd4rxMvbQjmkXiO1XTkB6HfShpbK0x9KAHUDmW1VKXZ3Z9dubi3o1bQxZL7RnqM/ke0C/yLTna5XMuJAuaWTIqMc7AKUm91sYtSqOMRgDvH+GUI2qkarVof6AzR9Sij0RMp3NKUYQikFk7nBNkZNKsFdXMEEVAIvjRjjCW5BA5ilKsWFvYqjY/yQo/yQrnCnF2tJMSmeiPYi0JyWItGRliNY1TrCUjd+qxf19y3cDl4dpt1rXk+iAziONFTvZeIIq9A2L1lhnvxjAWVH1oZkN+RmWJIv69BCTXBxqGcUeJM0+41gebEyN1pckCV23lSQ4kVwENX6ATl9oy1GdirG4fYiCAUm1hU1xRLT4i1iSuotWCdM1kd7VKHa5+kFNXGLoHvkI9I8iKMhBEX5plBFUJTvFKSH2LDEejNW/oSl7sYKuvkV7uvdVpJ30ioCYBBR0MPRiNQjLTH86bjIlNMa8aL+gwJqvMdFt2plCIEuZfz2w3JjWzgPnOdYuAQ4sSksmYjFrR7Ck/l72doynHbNiWDek4EBc+Fi3CaeiYhuIPclHNsu2aKfOcgpY9J4gBP0v0zGIec1R0CVvY0WHRwfo4Y0uqwYnDwdMG7SKaoKNYeV+EewaPiN3cQtH89YHey5xRqqYwXUa7HZkFw8ooI9kDF3OtDj9e9hx+pECN41h8rExDkFq13jAiWR/0lJanGVrSlpvY2HFWYEvqXuVI4soIttR11WFJg0zVz+edtVK/6OSXPlrxnnCbVvasvEgbTt4Hr2d9GxZVdMNumY02GtEq7hKz33lSGPcWRrm1Oa896avcMMuDixxxLvriptZ5v/Pwg72rK7PveS545BiFCOkpM3126lVgEVOqGU2BXXY/RZYQUjjuP30WYiQJ3drIlT3Au4AwdcWtFTu2DHm/UjFuY8hYZLZ71GHtSijiPS9xuamhOnAhwzXh+GaaRLipYTJCYj/pKeMdcuzqxmXy4MYoLpgubJnqs8MvSqLR4C68D+HIRh2DDAP47b//AR7TS3/ZDAAA').then(txt=>{
+decomp('H4sIAKSUjGoC/22WP48cNwzFv8vUu4L4V1Q6x0lh4OIrHKQxrkprwEBSpAjy3fM0mtkTx9sYPv1WGurxkdS/25/fv/29/fR1+/T5t1+/bLft4+vH18+/f9j/+fnTC1b+ePny4eWX1+3ttv31/Z/x46/1thExcaVK242pdmtCVFq83Vao282bVSnKGbTtpiyVpJXeH6gfB965hpTmJxDm2mrFly7rfmwQaia1S+GWGW83wn/MpJdKmck4D99stffCl0MROX4RiJajqEzIRDrgiETUpTbrxVZoOxTvLKXGCSKOOIl6w5/YRZSh7pcLVm4I5rIztlvgYKGiC4Aihl1KhcbvKeXk3iN6dIkpCaWckISVuKy3XfeG2xehEz0UvpNxaI86c0xJ4juAVbbSNDMZgVRy6dWKeoa6Q9yXqRc/olkkvlM1Delx2IeSxubO0INOoHJsq6Uua3Zde+Ti3o3dkcVSe4b6TL4Ttot8S452+RoXkgXNLBmVGHfglKReq7NHccpoBPD+EU45IidVq0X7iR45Io8+EjGdzilFEYpAZu1wTpCRiZsX1cwQRUAi+NGOMJbkEDUUpVgxX9iqNj/JCj/JCucKadzQTkpkoj+KtSQki7VkZIjlGg+xlozcqcf+fcl1A5dH026zriXXB5lBnFbkwd4LRHF2QKzumfFuDGNB1YdmNuRnVJYo4t9LQHJ9oGEYd5Q484RrfbA1YqSuuCxw1Vae5EByFdDwBTpxqZ6hPhNjdfsQAwGUagub4opqaSNiTeIqWi1I10x2V6vU4eqTPHSFoXvgK9QzgqwoA0H0xS0jqEpwSquE1HtkOBqtNUdXasUOtvoa6eXevU476RMBNQko6GDowWgUkpn+cN9kTByKeeW8oMOYrDLTbdmZQiFKmH89s92Y5GYB8z32LQIOLUpIJmMyakWzp7wueztHU47ZsC0bsuFCXPjYtAinoWMaSjvJRTXLtnNT5jkFLXtOEAP+LNEzi3nNUdElbGFHh0UH6+OOnlSDE4eDpw38Ipqgo1h534R3Bo+ImzULRfPXE72XOaNUTWG6jHY7MguGlVFGsgcu1rQ2+PFy5vAjBWoc1+JjZxqC5NW6Y0SynvQhLU8zeNKWXWycOCvQk7pXOZK4MoItdd11WNIgU22P9c5aqV90apc+WvE7YZ9Wbll5ER9O3gdvy/o6NlV0w26ZjTYa4RVvidnvWlIY7xZGufmc1y3pq+yY5cFFjjgXffFS67y/efhk7+rK7HstFzxyjEKE9JSZPrv1KrCIKdWMpsBNdj9FlhBSYGyH7/JGUrA56r3wuf4uHyxd8WbFeZ4h7w8qxlsM+YrMdoc2GLsSSnjPSlzeaagNPMcQik2Y5hDeaZiLELg96EPEO8QQPpeXuYP3ojTBbGHLVJ9cfZERvXu8CGMBh0vHFMP0ffvvf3n6Z+XWDAAA').then(txt=>{
   const p=JSON.parse(txt);
   window.ALL=p.rows.map(r=>Object.fromEntries(p.cols.map((k,i)=>[k,r[i]])));
   init();
@@ -204,7 +204,7 @@ function init(){
   meses.forEach(m=>{
     const o=document.createElement('option');
     o.value=m;
-    o.textContent=(m===0?'Saldo Inicial':'Acum. at\u00e9 '+(MESES_PT[m]||m));
+    o.textContent=MESES_PT[m]||('M'+m);
     fm.appendChild(o);
   });
   if(meses.length)fm.value=meses[meses.length-1];
@@ -246,7 +246,7 @@ function buildMesData(maxMes){
 
 function mesLabel(maxMes){
   const m=Number(maxMes);
-  return m===0?'Saldo Inicial':'Acum. at\u00e9 '+(MESES_PT[m]||'M'+m);
+  return MESES_PT[m]||('M'+m);
 }
 
 function acctMatch(acct){
@@ -276,7 +276,7 @@ function aplicar(){
 
     html+='<tr class="row-eq" onclick="toggle(\''+eid+'\')">'
       +'<td class="left" style="border-left:3px solid '+col+'">'
-      +'<span class="tog" id="tog_'+eid+'">&#9658;</span>'
+      +'<span class="tog" id="tog_'+eid+'" data-open="0">&#9658;</span>'
       +'<strong style="color:'+col+'">'+d.eq.id+'</strong>'
       +' <span style="font-weight:400;font-size:11px;opacity:.8">'+d.eq.desc+'</span></td>'
       +'<td class="left" style="font-size:11.5px;font-weight:400;opacity:.8">'+period+'</td>'
@@ -352,17 +352,18 @@ function toggleKpis(el){
 function toggle(id){
   const tog=document.getElementById('tog_'+id);
   if(!tog)return;
-  const expanded=tog.innerHTML.includes('9660');
+  const expanded=tog.dataset.open==='1';
   document.querySelectorAll('[data-par="'+id+'"]').forEach(tr=>tr.style.display=expanded?'none':'');
-  tog.innerHTML=expanded?'&#9658;':'&#9660;';
+  tog.dataset.open=expanded?'0':'1';
+  tog.textContent=expanded?'►':'▼';
 }
 function expandirTudo(){
   document.querySelectorAll('[data-par]').forEach(tr=>tr.style.display='');
-  document.querySelectorAll('.tog').forEach(el=>el.innerHTML='&#9660;');
+  document.querySelectorAll('.tog').forEach(el=>{el.textContent='▼';el.dataset.open='1';});
 }
 function recolherTudo(){
   document.querySelectorAll('[data-par]').forEach(tr=>tr.style.display='none');
-  document.querySelectorAll('.tog').forEach(el=>el.innerHTML='&#9658;');
+  document.querySelectorAll('.tog').forEach(el=>{el.textContent='►';el.dataset.open='0';});
 }
 
 function onContaInput(){
