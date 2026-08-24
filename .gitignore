@@ -39,8 +39,6 @@ __pycache__/
 # Relatórios Excel gerados automaticamente
 Relatorio_*.xlsx
 
-# Documentação local não publicável
-README.md
 
 # Scripts utilitários/de teste (não são painéis publicados)
 autorizar_gmail.py
