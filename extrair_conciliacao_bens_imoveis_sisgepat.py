@@ -54,7 +54,7 @@ MESES = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
 
 # ── Extração e montagem ────────────────────────────────────────────────────────
 def extrair(mes, ano):
-    data_corte = f"{ano+1:04d}-01-01" if mes == 12 else f"{ano:04d}-{mes+1:02d}-01"
+    data_corte = date.today().strftime("%Y-%m-%d")
     print(f"[{datetime.now():%H:%M:%S}] Extraindo dados ({MESES[mes]}/{ano})…")
     df_t, df_e, df_o, df_s1, df_si = _core.extrair_via_oracle(data_corte, mes, ano)
     print(f"[{datetime.now():%H:%M:%S}] Montando base…")
@@ -150,7 +150,8 @@ def gerar_html(quadro, eventos, transf, achados, siggo_tomb, mes, ano):  # noqa:
 
     mes_label = MESES[mes]
     meta = dict(ano=ano, mes=mes, mes_label=mes_label, tot_sis=tot_sis, tot_sig=tot_sig,
-                div_reais=div_reais, emitido=datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                div_reais=div_reais, emitido=datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                data_extracao=date.today().strftime("%d/%m/%Y"))
 
     def _q(df, cols):
         return df[cols].where(pd.notnull(df[cols]), None).to_dict(orient="records")
@@ -253,7 +254,7 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
 </header>
 <div class="krow" id="krow"></div>
 <div class="fbar">
-  <div class="fg"><label>M&#234;s de Refer&#234;ncia</label>
+  <div class="fg"><label>Data de Extra&#231;&#227;o</label>
     <div class="mes-badge" id="mes-ref">—</div>
   </div>
   <div class="fg"><label>Unidade Gestora</label>
@@ -362,7 +363,7 @@ function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');c
     '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
     '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
-  document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
+  document.getElementById('mes-ref').textContent=meta.data_extracao;
   acState={{
     'u':{{sel:'',list:buildList(r=>r.UG,r=>r.UG_LABEL),inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}},
     'c':{{sel:'',list:buildList(r=>r.CONTA,r=>r.CONTA_LABEL),inp:'fc-input',clr:'fc-clear',dd:'fc-dd'}}
@@ -396,8 +397,8 @@ def publicar(html, no_push=False):
 
 def main():
     hoje = date.today()
-    mes_def = hoje.month - 1 if hoje.month > 1 else 12
-    ano_def = hoje.year if hoje.month > 1 else hoje.year - 1
+    mes_def = hoje.month
+    ano_def = hoje.year
 
     p = argparse.ArgumentParser()
     p.add_argument("--mes",     type=int, default=mes_def)
