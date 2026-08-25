@@ -257,7 +257,7 @@ tfoot tr td.left{text-align:left}
 <header>
   <div style="display:flex;align-items:center">
     <div class="hlogo">&#9878;</div>
-    <h1>Correspond&#234;ncia Patrimonial &#8212; Ativo &#215; Passivo
+    <h1>Correspond&#234;ncia &#8212; Ativo &#215; Passivo
       <span>SIGGO &#183; La&#231;amentos &#183; Ano Exerc&#237;cio 2026</span>
     </h1>
     <a class="voltar" href="index.html">&#8592; Painel inicial</a>
