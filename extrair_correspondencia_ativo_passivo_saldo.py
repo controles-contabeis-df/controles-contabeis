@@ -1,18 +1,19 @@
 """
-Correspondência Patrimonial Ativo x Passivo — por Saldo
+Correspondência Ativo x Passivo — por Saldo Consolidado
 Gera painel HTML autocontido e publica no GitHub Pages.
 
-Monitora equações entre contas do Ativo (classe 1) e do Passivo (classe 2),
-consultando VSALDOCONTABIL. O painel agrupa por UG + mês para verificar se os
-saldos intragovernamentais se compensam na consolidação do GDF.
+Visão CONSOLIDADA: agrega os saldos de todas as UGs. Lançamentos
+intragovernamentais que são contrapartida de outra UG se anulam no
+consolidado, revelando se as equações fecham em nível de GDF.
 
-Equações monitoradas (extensíveis em EQUACOES):
+Equações monitoradas (em sincronia com extrair_correspondencia_ativo_passivo.py):
   EQ1: 21142XXXX = 113620101 + 113620103
   EQ2: 218820101 = 113620102 + 113620104
   EQ3: 218820104 = 112120101
   EQ4: 218820107 = 112120104
-  EQ5: 218820108 = 112120107
+  EQ5: 214320100 + 214325100 + 218820108 + 218827005 = 112120107
   EQ6: 218924019 = 112322200
+  EQ7: 113220700 + 112920101 = 0
 
 Uso:
     python extrair_correspondencia_ativo_passivo_saldo.py
@@ -38,7 +39,7 @@ ARQUIVO_HTML = "correspondencia_ativo_passivo_saldo.html"
 
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
-MESES = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
+MESES = {0:"Saldo Inicial",1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
          7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"}
 
 EQUACOES = [
@@ -54,12 +55,15 @@ EQUACOES = [
     {"id": "EQ4", "desc": "218820107 = 112120104",
      "passivo_exact": [218820107], "passivo_prefix": None,
      "ativo": [112120104]},
-    {"id": "EQ5", "desc": "218820108 = 112120107",
-     "passivo_exact": [218820108], "passivo_prefix": None,
+    {"id": "EQ5", "desc": "214320100 + 214325100 + 218820108 + 218827005 = 112120107",
+     "passivo_exact": [214320100, 214325100, 218820108, 218827005], "passivo_prefix": None,
      "ativo": [112120107]},
     {"id": "EQ6", "desc": "218924019 = 112322200",
      "passivo_exact": [218924019], "passivo_prefix": None,
      "ativo": [112322200]},
+    {"id": "EQ7", "desc": "113220700 + 112920101 = 0",
+     "passivo_exact": [], "passivo_prefix": None,
+     "ativo": [113220700, 112920101]},
 ]
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
@@ -78,14 +82,12 @@ def _where_contas() -> str:
     return " OR ".join(parts)
 
 # ── SQL ───────────────────────────────────────────────────────────────────────
-# Saldo líquido por UG + conta + mês.
+# Consolidado: sem agrupamento por UG — todos os saldos somados.
 # Classe 1 (ativo/devedora):  saldo = VADEBITO - VACREDITO
 # Classe 2 (passivo/credora): saldo = VACREDITO - VADEBITO
 SQL = f"""
 SELECT
   v.INMES,
-  v.COGESTAO,
-  v.COUG,
   TO_CHAR(v.COCONTACONTABIL)                         AS COCONTACONTABIL,
   ROUND(SUM(
     CASE SUBSTR(TO_CHAR(v.COCONTACONTABIL), 1, 1)
@@ -96,208 +98,193 @@ SELECT
   ), 2)                                              AS VLSALDO
 FROM {SCHEMA}VSALDOCONTABIL v
 WHERE ({_where_contas()})
-GROUP BY v.INMES, v.COGESTAO, v.COUG, TO_CHAR(v.COCONTACONTABIL)
-ORDER BY v.INMES, v.COUG, TO_CHAR(v.COCONTACONTABIL)
+GROUP BY v.INMES, TO_CHAR(v.COCONTACONTABIL)
+ORDER BY v.INMES, TO_CHAR(v.COCONTACONTABIL)
 """
 
-SQL_UG = f"SELECT TO_CHAR(COUG) AS COUG, TRIM(NOUG) AS NOUG FROM {SCHEMA}VUNIDADEGESTORA"
-
-SQL_GESTAO = f"SELECT TO_CHAR(COGESTAO) AS COGESTAO, TRIM(NOGESTAO) AS NOGESTAO FROM {SCHEMA}GESTAO"
+def _sql_conta() -> str:
+    parts = []
+    if _CONTAS_ATIVO + _CONTAS_EXATAS:
+        lst = ",".join(str(c) for c in sorted(_CONTAS_ATIVO + _CONTAS_EXATAS))
+        parts.append(f"COCONTACONTABIL IN ({lst})")
+    for pfx in _PREFIXOS:
+        lo = int(pfx) * 10**(9 - len(pfx))
+        hi = (int(pfx) + 1) * 10**(9 - len(pfx)) - 1
+        parts.append(f"COCONTACONTABIL BETWEEN {lo} AND {hi}")
+    return " OR ".join(parts)
 
 SQL_CONTA = f"""SELECT TO_CHAR(COCONTACONTABIL) AS COCONTACONTABIL, TRIM(NOCONTACONTABIL) AS NOCONTACONTABIL
 FROM {SCHEMA}VCONTACONTABIL
-WHERE COCONTACONTABIL IN ({",".join(str(c) for c in sorted(_CONTAS_ATIVO + _CONTAS_EXATAS))})"""
+WHERE {_sql_conta()}"""
 
 # ── HTML Template ─────────────────────────────────────────────────────────────
 HTML_TEMPLATE = r"""<!DOCTYPE html>
-<!-- v-corresp-saldo-1 -->
+<!-- v-corresp-saldo-4 -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Correspondência Ativo x Passivo — por Saldo — SIGGO</title>
+<title>Correspondência — Ativo × Passivo por Saldo — SIGGO</title>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --navy:#0d1b3e;--navy-mid:#162550;--navy-light:#1e3267;
   --teal:#0090a8;--teal-light:#00b8d4;
   --surface:#fff;--bg:#f2f5f9;--border:#dce3ed;
-  --row-alt:#f4f7fb;--hover:#e8f0f8;
+  --row-alt:#f7f9fc;--hover:#eaf4f7;
   --text:#1a2033;--muted:#6b7a99;
-  --red:#c0392b;--amber:#b7860b;--green:#1a7a44;--radius:10px;
+  --red:#c0392b;--green:#1a7a44;--amber:#b7860b;--radius:10px;
   --shadow:0 2px 12px rgba(13,27,62,.10);
 }
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
 header{background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff;padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 3px 16px rgba(13,27,62,.35);position:sticky;top:0;z-index:100}
 .hlogo{width:32px;height:32px;background:var(--teal);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;margin-right:14px}
-header h1{font-size:14px;font-weight:700;letter-spacing:.6px;text-transform:uppercase}
+header h1{font-size:14px;font-weight:700;letter-spacing:.3px}
 header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-transform:none;letter-spacing:0;margin-top:1px}
 #ts{font-size:11px;color:#7a99bb;white-space:nowrap}
+.voltar{font-size:11px;color:#7a99bb;text-decoration:none;display:flex;align-items:center;gap:4px;margin-left:20px;opacity:.8}
+.voltar:hover{opacity:1}
 .fbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-.fg select{border:1.5px solid var(--border);border-radius:6px;padding:7px 28px 7px 10px;font-size:12.5px;min-width:130px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7a99' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--text);cursor:pointer;appearance:none}
+.fg select{border:1.5px solid var(--border);border-radius:6px;padding:7px 28px 7px 10px;font-size:12.5px;min-width:150px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7a99' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--text);cursor:pointer;appearance:none}
 .fg select:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
 .ac-wrap{position:relative}
-.ac-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text)}
+.ac-input{border:1.5px solid var(--border);border-radius:6px;padding:7px 32px 7px 10px;font-size:12.5px;width:100%;background:#fff;color:var(--text);transition:border-color .15s}
 .ac-input:focus{outline:none;border-color:var(--teal);box-shadow:0 0 0 3px rgba(0,144,168,.12)}
-.ac-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none}
-.ac-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
+.ac-clear{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;display:none;line-height:1;padding:2px}
+.ac-dd{position:absolute;top:calc(100% + 4px);left:0;right:0;min-width:320px;background:#fff;border:1.5px solid var(--teal);border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;max-height:240px;overflow-y:auto;display:none}
 .ac-dd-item{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border)}
 .ac-dd-item:last-child{border-bottom:none}
 .ac-dd-item:hover{background:var(--hover)}
-.ac-dd-item strong{color:var(--navy);font-weight:700}
+.ac-dd-item strong{color:var(--navy)}
 .ac-dd-empty{padding:12px;color:var(--muted);font-size:12px;text-align:center}
-.eq-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.eq-btns label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-right:2px}
-.btn-eq{border:1.5px solid;border-radius:20px;padding:4px 12px;font-size:11px;font-weight:600;cursor:pointer;background:transparent;transition:background .15s,color .15s}
-.btn-eq.active{color:#fff}
-.btn-eq1{border-color:#c0392b;color:#c0392b}   .btn-eq1.active{background:#c0392b}
-.btn-eq2{border-color:#b7860b;color:#b7860b}   .btn-eq2.active{background:#b7860b}
-.btn-eq3{border-color:#1a7a44;color:#1a7a44}   .btn-eq3.active{background:#1a7a44}
-.btn-eq4{border-color:#6c3483;color:#6c3483}   .btn-eq4.active{background:#6c3483}
-.btn-eq5{border-color:#b84b00;color:#b84b00}   .btn-eq5.active{background:#b84b00}
-.btn-eq6{border-color:#007b7b;color:#007b7b}   .btn-eq6.active{background:#007b7b}
-.btn-lim{border:1.5px solid var(--border);border-radius:20px;padding:4px 12px;font-size:11px;cursor:pointer;background:transparent;color:var(--muted)}
-.btn-lim:hover{border-color:var(--teal);color:var(--teal)}
-.kpi-row{display:flex;flex-wrap:wrap;gap:10px;padding:14px 28px;background:var(--bg)}
-.kpi{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 16px;min-width:160px;box-shadow:var(--shadow);transition:border-color .2s}
-.kpi .kt{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
-.kpi .kv{font-size:15px;font-weight:700}
-.kpi.ka{border-color:#c0392b}.kpi.ka .kv{color:#c0392b}
-.kpi.km{border-color:#b7860b}.kpi.km .kv{color:#b7860b}
-.kpi.kg{border-color:#1a7a44}.kpi.kg .kv{color:#1a7a44}
-.kpi.kv4{border-color:#6c3483}.kpi.kv4 .kv{color:#6c3483}
-.kpi.kv5{border-color:#b84b00}.kpi.kv5 .kv{color:#b84b00}
-.kpi.kv6{border-color:#007b7b}.kpi.kv6 .kv{color:#007b7b}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);margin:0 28px 28px;overflow:hidden}
-.card-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:linear-gradient(135deg,var(--navy) 0%,var(--navy-light) 100%);color:#fff}
-.card-hd h2{font-size:12px;font-weight:700;letter-spacing:.5px;text-transform:uppercase}
-#ttitle{font-size:11px;color:#9ab0cc}
-.pg-row{display:flex;gap:8px;align-items:center}
-.pg-btn{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer}
-.pg-btn:hover{background:rgba(255,255,255,.22)}
-#pg-info{font-size:11px;color:#9ab0cc}
-.tbl-wrap{overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:12.5px}
-th{position:sticky;top:58px;background:var(--navy);color:#fff;padding:9px 10px;font-size:11px;font-weight:600;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;z-index:10}
-th:hover{background:var(--navy-light)}
-.si{font-size:10px;opacity:.65;margin-left:3px}
-td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
-tr.row-ug{cursor:pointer}
-tr.row-ug:hover td{background:var(--hover)}
-tr.dr{background:var(--row-alt);display:none}
-tr.dr.alt{background:var(--bg)}
-tr.dr.open{display:table-row}
-.left{text-align:left}
-.vp{color:var(--red);font-weight:600;text-align:right}
-.vz{color:var(--muted);text-align:right}
-.vn{color:var(--green);text-align:right}
-td:not(.left){text-align:right}
-tfoot td{font-weight:700;background:var(--navy);color:#fff;padding:8px 10px;border:none;text-align:right}
-tfoot td.left{text-align:left}
-.tog{font-size:9px;opacity:.45;margin-right:4px;display:inline-block;transition:transform .15s}
-.tog.open{transform:rotate(90deg)}
-#loading{display:none;position:fixed;inset:0;background:rgba(13,27,62,.72);z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:12px}
-#loading.show{display:flex}
-.spin{width:38px;height:38px;border:4px solid rgba(255,255,255,.2);border-top-color:var(--teal-light);border-radius:50%;animation:spin .7s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-#loading p{color:#fff;font-size:13px}
-.csv-btn{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:4px 12px;font-size:11px;cursor:pointer;margin-left:8px}
-.csv-btn:hover{background:rgba(255,255,255,.2)}
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto;align-items:flex-end}
+.btn{border:none;border-radius:6px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s;white-space:nowrap}
+.btn:hover{opacity:.82}
+.btn-p{background:var(--teal);color:#fff}
+.btn-g{background:var(--border);color:var(--text)}
+.kpi-section{background:var(--surface);border-bottom:1px solid var(--border)}
+.kpi-toggle{display:flex;align-items:center;gap:8px;padding:8px 28px;cursor:pointer;user-select:none;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.kpi-toggle:hover{background:var(--row-alt)}
+.kpi-toggle-arrow{font-size:10px;transition:transform .2s;display:inline-block}
+.kpi-toggle-arrow.open{transform:rotate(90deg)}
+.kpi-body{display:none;flex-direction:column;gap:8px;padding:10px 28px 14px}
+.kpi-body.open{display:flex}
+.kpi-row{display:flex;flex-wrap:wrap;gap:8px}
+.kpi-group{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;flex:1;min-width:220px}
+.kpi-group-title{background:var(--navy);color:#c8d8ec;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:5px 12px}
+.kpi-group-inner{display:flex;flex-wrap:wrap}
+.kpi{padding:9px 14px;position:relative;overflow:hidden;flex:1;min-width:110px;border-right:1px solid var(--border);background:var(--surface)}
+.kpi:last-child{border-right:none}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--teal),var(--teal-light))}
+.kpi.kw::before{background:linear-gradient(90deg,var(--amber),#e6b800)}
+.kpi.ka::before{background:linear-gradient(90deg,var(--red),#e74c3c)}
+.kpi.ko::before{background:linear-gradient(90deg,var(--green),#27ae60)}
+.kpi-total-row{display:flex;flex-wrap:wrap;gap:8px}
+.kpi-total-row .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);flex:1;min-width:170px}
+.kpi-total-row .kv{font-size:20px}
+.kl{font-size:9px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.kv{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}
+.ks{font-size:10.5px;color:var(--muted);margin-top:4px}
+.badge{display:inline-block;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700}
+.br{background:#fde8e6;color:var(--red)}
+.bg{background:#e8f5ee;color:var(--green)}
+.vp{color:var(--green)}
+.vn{color:var(--red)}
+.vz{color:var(--muted)}
+.cnt-bar{padding:8px 28px;font-size:12px;color:var(--muted);background:var(--surface);border-bottom:1px solid var(--border)}
+.tw{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto;margin:18px 28px}
+table{width:100%;border-collapse:collapse;min-width:850px}
+thead th{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:right;white-space:nowrap;letter-spacing:.3px}
+thead th.left{text-align:left}
+tr.row-eq{background:#1e3267;cursor:pointer}
+tr.row-eq:hover td{filter:brightness(1.1)}
+tr.row-eq td{color:#e8f0fc;font-weight:700;padding:10px 14px;font-size:12px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tr.row-eq td.left{text-align:left}
+tr.row-acct{background:var(--surface)}
+tr.row-acct.alt{background:var(--row-alt)}
+tr.row-acct:hover td{background:var(--hover)}
+tr.row-acct td{padding:8px 14px 8px 40px;font-size:12px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--border);font-variant-numeric:tabular-nums}
+tr.row-acct td.left{text-align:left;color:var(--muted)}
+tfoot tr td{background:#f0f4fb;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+tfoot tr td.left{text-align:left}
+.tog{display:inline-block;width:14px;text-align:center;font-size:10px;margin-right:4px}
 </style>
 </head>
 <body>
-<div id="loading"><div class="spin"></div><p>Descomprimindo dados&hellip;</p></div>
 <header>
   <div style="display:flex;align-items:center">
     <div class="hlogo">&#9878;</div>
-    <h1>Correspondência Ativo x Passivo<span>Por Saldo — VSALDOCONTABIL &middot; SIGGO &middot; Exercício 2026</span></h1>
+    <h1>Correspond&#234;ncia &#8212; Ativo &#215; Passivo
+      <span>Por Saldo Consolidado &#183; SIGGO &#183; Exerc&#237;cio 2026</span>
+    </h1>
+    <a class="voltar" href="index.html">&#8592; Painel inicial</a>
   </div>
-  <div style="display:flex;align-items:center;gap:16px">
-    <button class="csv-btn" onclick="exportCSV()">&#8595; CSV</button>
-    <span id="ts">__TIMESTAMP__</span>
-  </div>
+  <span id="ts">__TIMESTAMP__</span>
 </header>
 
 <div class="fbar">
   <div class="fg">
-    <label>Saldo at&#233; o m&#234;s</label>
-    <select id="fmes" onchange="aplicar()">
-      <option value="">Ano completo</option>
-    </select>
+    <label>Saldo acumulado at&#233;</label>
+    <select id="fm" onchange="aplicar()"></select>
   </div>
-  <div class="fg">
-    <label>Gestão</label>
-    <select id="fgest" onchange="aplicar()">
-      <option value="">Todas as gestões</option>
-    </select>
-  </div>
-  <div class="fg">
-    <label>UG</label>
-    <div class="ac-wrap" style="width:300px">
-      <input id="ac-ug" class="ac-input" placeholder="Buscar UG..." autocomplete="off"
-             oninput="onAC()" onfocus="onAC()" onblur="setTimeout(()=>closeAC(),180)">
-      <button class="ac-clear" id="ac-clr" onclick="clearAC()">&#10005;</button>
-      <div class="ac-dd" id="ac-dd"></div>
+  <div class="fg" style="min-width:300px">
+    <label>Conta Cont&#225;bil</label>
+    <div class="ac-wrap">
+      <input id="fc-input" class="ac-input" style="min-width:300px"
+        placeholder="C&#243;digo ou nome da conta..."
+        autocomplete="off" oninput="onContaInput()" onfocus="onContaInput()">
+      <button class="ac-clear" id="fc-clear" onclick="limContaFil()" title="Limpar">&#x2715;</button>
+      <div class="ac-dd" id="fc-dd"></div>
     </div>
   </div>
   <div class="fg">
-    <label>Filtrar por equação</label>
-    <div class="eq-btns">
-      <button id="btn-eq1" class="btn-eq btn-eq1" onclick="filtrarEq('eq1')">&#9651; Diverg. EQ1</button>
-      <button id="btn-eq2" class="btn-eq btn-eq2" onclick="filtrarEq('eq2')">&#9651; Diverg. EQ2</button>
-      <button id="btn-eq3" class="btn-eq btn-eq3" onclick="filtrarEq('eq3')">&#9651; Diverg. EQ3</button>
-      <button id="btn-eq4" class="btn-eq btn-eq4" onclick="filtrarEq('eq4')">&#9651; Diverg. EQ4</button>
-      <button id="btn-eq5" class="btn-eq btn-eq5" onclick="filtrarEq('eq5')">&#9651; Diverg. EQ5</button>
-      <button id="btn-eq6" class="btn-eq btn-eq6" onclick="filtrarEq('eq6')">&#9651; Diverg. EQ6</button>
-      <button class="btn-lim" onclick="limpar()">Limpar</button>
-    </div>
+    <label>Exibir equa&#231;&#245;es</label>
+    <select id="fs" onchange="aplicar()">
+      <option value="todos">Todas</option>
+      <option value="com_div">Com diverg&#234;ncia</option>
+      <option value="sem_div">Sem diverg&#234;ncia</option>
+    </select>
+  </div>
+  <div class="btns">
+    <button class="btn btn-g" onclick="expandirTudo()">&#9660; Expandir</button>
+    <button class="btn btn-g" onclick="recolherTudo()">&#9650; Recolher</button>
+    <button class="btn btn-g" onclick="limpar()">&#8635; Limpar</button>
+    <button class="btn btn-p" onclick="exportar()">&#8595; CSV</button>
   </div>
 </div>
 
-<div class="kpi-row">
-  <div class="kpi" id="kpi-eq1"><div class="kt">EQ1 — 21142XXXX = 113620101+103</div><div class="kv" id="kv-eq1">—</div></div>
-  <div class="kpi" id="kpi-eq2"><div class="kt">EQ2 — 218820101 = 113620102+104</div><div class="kv" id="kv-eq2">—</div></div>
-  <div class="kpi" id="kpi-eq3"><div class="kt">EQ3 — 218820104 = 112120101</div><div class="kv" id="kv-eq3">—</div></div>
-  <div class="kpi" id="kpi-eq4"><div class="kt">EQ4 — 218820107 = 112120104</div><div class="kv" id="kv-eq4">—</div></div>
-  <div class="kpi" id="kpi-eq5"><div class="kt">EQ5 — 218820108 = 112120107</div><div class="kv" id="kv-eq5">—</div></div>
-  <div class="kpi" id="kpi-eq6"><div class="kt">EQ6 — 218924019 = 112322200</div><div class="kv" id="kv-eq6">—</div></div>
+<div class="kpi-section">
+  <div class="kpi-body open" id="krow-total"></div>
+  <div class="kpi-toggle" onclick="toggleKpis(this)">
+    <span class="kpi-toggle-arrow" id="kpi-arrow">&#9658;</span>
+    Detalhar por equa&#231;&#227;o
+  </div>
+  <div class="kpi-body" id="krow"></div>
 </div>
+<div class="cnt-bar"><span id="cnt"></span></div>
 
-<div class="card">
-  <div class="card-hd">
-    <h2>Saldos por UG &middot; Mês</h2>
-    <div style="display:flex;align-items:center;gap:16px">
-      <span id="ttitle">—</span>
-      <div class="pg-row">
-        <button class="pg-btn" onclick="mudarPg(-1)">&#8592;</button>
-        <span id="pg-info">—</span>
-        <button class="pg-btn" onclick="mudarPg(1)">&#8594;</button>
-      </div>
-    </div>
-  </div>
-  <div class="tbl-wrap">
-    <table>
-      <thead><tr>
-        <th style="width:28px"></th>
-        <th class="left" style="min-width:220px" onclick="sortBy('UG')">UG <span id="s_UG" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('ATIVO')">Ativo <span id="s_ATIVO" class="si">&#8645;</span></th>
-        <th style="width:110px" onclick="sortBy('PASSIVO')">Passivo <span id="s_PASSIVO" class="si">&#8645;</span></th>
-        <th style="width:200px" onclick="sortBy('DIV')">Diverg&#234;ncia <span id="s_DIV" class="si">&#8645;</span></th>
-      </tr></thead>
-      <tbody id="tb"></tbody>
-      <tfoot><tr id="tfoot-row"><td class="left" colspan="5">&#8212;</td></tr></tfoot>
-    </table>
-  </div>
+<div class="tw">
+  <table>
+    <thead><tr>
+      <th class="left" style="min-width:340px">Equa&#231;&#227;o / Conta Cont&#225;bil</th>
+      <th class="left" style="min-width:120px">M&#234;s</th>
+      <th style="width:195px">Ativo</th>
+      <th style="width:195px">Passivo</th>
+      <th style="width:160px">Diverg&#234;ncia</th>
+    </tr></thead>
+    <tbody id="tbody"></tbody>
+    <tfoot><tr id="tfoot"></tr></tfoot>
+  </table>
 </div>
 
 <script>
 const EQUACOES=__EQUACOES__;
-const UG_NAMES=__UG_NAMES__;
-const GESTAO_NAMES=__GESTAO_NAMES__;
 const CONTA_NAMES=__CONTA_NAMES__;
-const MESES_PT={1:'Jan',2:'Fev',3:'Mar',4:'Abr',5:'Mai',6:'Jun',7:'Jul',8:'Ago',9:'Set',10:'Out',11:'Nov',12:'Dez'};
+const MESES_PT={0:'Saldo Inicial',1:'Janeiro',2:'Fevereiro',3:'Mar\u00e7o',4:'Abril',5:'Maio',6:'Junho',
+                7:'Julho',8:'Agosto',9:'Setembro',10:'Outubro',11:'Novembro',12:'Dezembro'};
+const EQ_COLORS=['var(--red)','var(--amber)','#2e7d32','#5e35b1','#e65100','#00695c','#880e4f'];
 
 function decomp(b64){
   const bin=atob(b64),buf=new Uint8Array(bin.length);
@@ -306,251 +293,262 @@ function decomp(b64){
   const w=ds.writable.getWriter();w.write(buf);w.close();
   return new Response(ds.readable).text();
 }
-
 decomp('__DADOS__').then(txt=>{
   const p=JSON.parse(txt);
-  const cols=p.cols;
-  window.ALL=p.rows.map(r=>Object.fromEntries(cols.map((k,i)=>[k,r[i]])));
+  window.ALL=p.rows.map(r=>Object.fromEntries(p.cols.map((k,i)=>[k,r[i]])));
   init();
 });
 
 function n(v){return v==null||v===''?0:+v||0;}
 function brl(v){return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);}
-function vc(v){return Math.abs(v)<0.005?'vz':v<0?'vn':'vp';}
-function fmtG(g){return g==null?'':String(g).padStart(5,'0');}
+function vc(v){return Math.abs(v)<0.005?'vz':v>0?'vp':'vn';}
+function prefixMatch(a,p){return p&&String(a).startsWith(p);}
 
-function isAtivo(acct){return String(acct).charAt(0)==='1';}
-function isPassivo(acct){return String(acct).charAt(0)==='2';}
-function prefixMatch(acct,pfx){return pfx&&String(acct).startsWith(pfx);}
-function passivoEq(eq,byAcct){
+function passivoEqSum(eq,byAcct){
   let s=0;
   if(eq.passivo_prefix){for(const[k,v]of Object.entries(byAcct)){if(prefixMatch(k,eq.passivo_prefix))s+=v;}}
   if(eq.passivo_exact){for(const c of eq.passivo_exact)s+=byAcct[String(c)]||0;}
-  return s;
+  return Math.round(s*100)/100;
+}
+function ativoEqSum(eq,byAcct){
+  return Math.round(eq.ativo.reduce((s,c)=>s+(byAcct[String(c)]||0),0)*100)/100;
 }
 
-const PG_SZ=50;
-let pg=1,sortCol='UG',sortDir=1,filterMode='',ugSel='',mesSel='',gestSel='';
-let filDocs=[];
+let contaFil='';
+let curData=null;
 
 function init(){
-  document.getElementById('loading').classList.remove('show');
   const meses=[...new Set(window.ALL.map(r=>n(r.INMES)))].sort((a,b)=>a-b);
-  const fm=document.getElementById('fmes');
-  meses.forEach(m=>{const o=document.createElement('option');o.value=m;o.textContent='Até '+(MESES_PT[m]||m);fm.appendChild(o);});
-  const gestoes=[...new Set(window.ALL.map(r=>String(r.COGESTAO||'')))].sort();
-  const fg=document.getElementById('fgest');
-  gestoes.forEach(g=>{const o=document.createElement('option');o.value=g;o.textContent=fmtG(g)+(GESTAO_NAMES[g]?' — '+GESTAO_NAMES[g]:'');fg.appendChild(o);});
+  const fm=document.getElementById('fm');
+  fm.innerHTML='';
+  meses.forEach(m=>{
+    const o=document.createElement('option');
+    o.value=m;
+    o.textContent=MESES_PT[m]||('M'+m);
+    fm.appendChild(o);
+  });
+  if(meses.length)fm.value=meses[meses.length-1];
   aplicar();
 }
 
-function ugLabel(coug,cogest){const nm=UG_NAMES[String(coug)];return fmtG(cogest)+' \u00b7 '+String(coug)+(nm?' \u2014 '+nm:'');}
-
-let acData=[];
-function onAC(){
-  const v=document.getElementById('ac-ug').value.trim().toLowerCase();
-  document.getElementById('ac-clr').style.display=v?'block':'none';
-  if(!v){closeAC();ugSel='';aplicar();return;}
-  const hits=acData.filter(x=>x.label.toLowerCase().includes(v)).slice(0,40);
-  const dd=document.getElementById('ac-dd');
-  if(!hits.length){dd.innerHTML='<div class="ac-dd-empty">Nenhuma UG encontrada.</div>';dd.style.display='block';return;}
-  dd.innerHTML=hits.map(x=>`<div class="ac-dd-item" onmousedown="pickAC('${x.id}','${x.label.replace(/'/g,"\\'")}')"><strong>${x.id}</strong> — ${x.name||''}</div>`).join('');
-  dd.style.display='block';
+function buildMesData(maxMes){
+  const byAcct={};
+  window.ALL.filter(r=>n(r.INMES)<=maxMes).forEach(r=>{
+    const a=String(r.COCONTACONTABIL);
+    byAcct[a]=(byAcct[a]||0)+n(r.VLSALDO);
+  });
+  const eqData=EQUACOES.map(eq=>{
+    const accts=[];
+    if(eq.passivo_exact){
+      eq.passivo_exact.forEach(c=>{
+        const a=String(c),vl=Math.round((byAcct[a]||0)*100)/100;
+        accts.push({acct:a,vl,side:'passivo'});
+      });
+    }
+    if(eq.passivo_prefix){
+      Object.entries(byAcct).forEach(([a,vl])=>{
+        if(prefixMatch(a,eq.passivo_prefix))
+          accts.push({acct:a,vl:Math.round(vl*100)/100,side:'passivo'});
+      });
+    }
+    eq.ativo.forEach(c=>{
+      const a=String(c),vl=Math.round((byAcct[a]||0)*100)/100;
+      accts.push({acct:a,vl,side:'ativo'});
+    });
+    accts.sort((a,b)=>a.acct.localeCompare(b.acct));
+    const passivoSum=passivoEqSum(eq,byAcct);
+    const ativoSum=ativoEqSum(eq,byAcct);
+    const div=Math.round((passivoSum-ativoSum)*100)/100;
+    return{eq,accts,passivoSum,ativoSum,div};
+  });
+  return{maxMes,eqData};
 }
-function pickAC(id,lbl){document.getElementById('ac-ug').value=lbl;document.getElementById('ac-clr').style.display='block';document.getElementById('ac-dd').style.display='none';ugSel=id;aplicar();}
-function closeAC(){document.getElementById('ac-dd').style.display='none';}
-function clearAC(){document.getElementById('ac-ug').value='';document.getElementById('ac-clr').style.display='none';ugSel='';aplicar();}
+
+function mesLabel(maxMes){
+  const m=Number(maxMes);
+  return MESES_PT[m]||('M'+m);
+}
+
+function acctMatch(acct){
+  if(!contaFil)return true;
+  const q=contaFil.toLowerCase();
+  return acct.toLowerCase().includes(q)||(CONTA_NAMES[acct]||'').toLowerCase().includes(q);
+}
 
 function aplicar(){
-  mesSel=document.getElementById('fmes').value;
-  gestSel=document.getElementById('fgest').value;
-  const data=window.ALL.filter(r=>{
-    if(mesSel&&n(r.INMES)>Number(mesSel))return false;
-    if(gestSel&&String(r.COGESTAO||'')!==gestSel)return false;
-    return true;
-  });
-  const ugIds=[...new Set(data.map(r=>String(r.COUG)))].sort();
-  acData=ugIds.map(id=>({id,name:UG_NAMES[id]||'',label:id+(UG_NAMES[id]?' — '+UG_NAMES[id]:'')}));
+  const maxMes=Number(document.getElementById('fm').value);
+  const showFil=document.getElementById('fs').value;
+  curData=buildMesData(maxMes);
+  const period=mesLabel(maxMes);
+  const tb=document.getElementById('tbody');
+  const tf=document.getElementById('tfoot');
+  let html='',totA=0,totP=0,totD=0,nEQ=0;
 
-  const map={};
-  data.forEach(r=>{
-    const key=String(r.COGESTAO)+'|'+String(r.COUG);
-    if(!map[key])map[key]={key,COGESTAO:r.COGESTAO,COUG:r.COUG,
-                           totAtivo:0,totPassivo:0,divEQ1:0,divEQ2:0,divEQ3:0,divEQ4:0,divEQ5:0,divEQ6:0,maxDiv:0,byAcct:{},rows:[]};
-    const d=map[key];
-    const vl=n(r.VLSALDO);
-    const acct=String(r.COCONTACONTABIL);
-    d.byAcct[acct]=(d.byAcct[acct]||0)+vl;
-    d.rows.push(r);
-    if(isAtivo(acct))d.totAtivo+=vl;
-    else if(isPassivo(acct))d.totPassivo+=vl;
-  });
-  Object.values(map).forEach(d=>{
-    d.totAtivo=Math.round(d.totAtivo*100)/100;
-    d.totPassivo=Math.round(d.totPassivo*100)/100;
-    EQUACOES.forEach(eq=>{
-      const pas=Math.round(passivoEq(eq,d.byAcct)*100)/100;
-      const ati=Math.round(eq.ativo.reduce((s,c)=>s+(d.byAcct[String(c)]||0),0)*100)/100;
-      const div=Math.round((pas-ati)*100)/100;
-      if(eq.id==='EQ1')d.divEQ1=div;
-      if(eq.id==='EQ2')d.divEQ2=div;
-      if(eq.id==='EQ3')d.divEQ3=div;
-      if(eq.id==='EQ4')d.divEQ4=div;
-      if(eq.id==='EQ5')d.divEQ5=div;
-      if(eq.id==='EQ6')d.divEQ6=div;
-    });
-    d.maxDiv=[d.divEQ1,d.divEQ2,d.divEQ3,d.divEQ4,d.divEQ5,d.divEQ6].reduce((m,v)=>Math.abs(v)>Math.abs(m)?v:m,0);
-  });
+  curData.eqData.forEach((d,i)=>{
+    const matchAccts=contaFil?d.accts.filter(a=>acctMatch(a.acct)):d.accts;
+    if(contaFil&&!matchAccts.length)return;
+    if(showFil==='com_div'&&Math.abs(d.div)<0.005)return;
+    if(showFil==='sem_div'&&Math.abs(d.div)>=0.005)return;
 
-  filDocs=Object.values(map).filter(d=>{
-    if(ugSel&&String(d.COUG)!==ugSel)return false;
-    if(filterMode==='eq1'&&Math.abs(d.divEQ1)<0.005)return false;
-    if(filterMode==='eq2'&&Math.abs(d.divEQ2)<0.005)return false;
-    if(filterMode==='eq3'&&Math.abs(d.divEQ3)<0.005)return false;
-    if(filterMode==='eq4'&&Math.abs(d.divEQ4)<0.005)return false;
-    if(filterMode==='eq5'&&Math.abs(d.divEQ5)<0.005)return false;
-    if(filterMode==='eq6'&&Math.abs(d.divEQ6)<0.005)return false;
-    return true;
-  });
-  filDocs.sort(cmpDocs);pg=1;render();kpis();
-}
+    const eid='eq'+i;
+    const col=EQ_COLORS[i%EQ_COLORS.length];
+    const dCls=Math.abs(d.div)<0.005?'vz':d.div>0?'vp':'vn';
 
-const SORT_COLS=['UG','ATIVO','PASSIVO','DIV'];
-let sortInit=false;
-function sortBy(col){
-  if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}
-  SORT_COLS.forEach(c=>{const el=document.getElementById('s_'+c);if(el)el.textContent=c===sortCol?(sortDir>0?'\u2191':'\u2193'):'\u21c5';});
-  filDocs.sort(cmpDocs);pg=1;render();
-}
-function cmpDocs(a,b){
-  if(sortCol==='UG')    return sortDir*(String(a.COUG).localeCompare(String(b.COUG)));
-  if(sortCol==='MES')   return sortDir*(a.INMES-b.INMES);
-  if(sortCol==='ATIVO') return sortDir*(n(a.totAtivo)-n(b.totAtivo));
-  if(sortCol==='PASSIVO')return sortDir*(n(a.totPassivo)-n(b.totPassivo));
-  if(sortCol==='DIV')   return sortDir*(Math.abs(n(a.maxDiv))-Math.abs(n(b.maxDiv)));
-  return 0;
-}
-
-function toggleDoc(did){
-  const tog=document.getElementById('tog_'+did);
-  if(tog)tog.classList.toggle('open');
-  document.querySelectorAll('[data-doc="'+did+'"]').forEach(r=>r.classList.toggle('open'));
-}
-
-function render(){
-  const tb=document.getElementById('tb');
-  const tf=document.getElementById('tfoot-row');
-  const start=(pg-1)*PG_SZ,end=Math.min(start+PG_SZ,filDocs.length);
-  let html='';
-  filDocs.slice(start,end).forEach(d=>{
-    const did='d'+String(d.key).replace(/[^a-z0-9]/gi,'_');
-    const totA=n(d.totAtivo),totP=n(d.totPassivo);
-    const _dp=[];
-    if(Math.abs(n(d.divEQ1))>=0.005)_dp.push('EQ1 '+brl(n(d.divEQ1)));
-    if(Math.abs(n(d.divEQ2))>=0.005)_dp.push('EQ2 '+brl(n(d.divEQ2)));
-    if(Math.abs(n(d.divEQ3))>=0.005)_dp.push('EQ3 '+brl(n(d.divEQ3)));
-    if(Math.abs(n(d.divEQ4))>=0.005)_dp.push('EQ4 '+brl(n(d.divEQ4)));
-    if(Math.abs(n(d.divEQ5))>=0.005)_dp.push('EQ5 '+brl(n(d.divEQ5)));
-    if(Math.abs(n(d.divEQ6))>=0.005)_dp.push('EQ6 '+brl(n(d.divEQ6)));
-    const divStr=_dp.length?_dp.join(' / '):'\u2014';
-    const hasdiv=_dp.length>0;
-    html+='<tr class="row-ug" onclick="toggleDoc(\''+did+'\')">'
-      +'<td><span class="tog" id="tog_'+did+'">&#9654;</span></td>'
-      +'<td class="left">'+ugLabel(d.COUG,d.COGESTAO)+'</td>'
-      +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
-      +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
-      +'<td class="'+(hasdiv?'vp':'vz')+'" style="font-size:11px;white-space:nowrap">'+divStr+'</td>'
+    html+='<tr class="row-eq" onclick="toggle(\''+eid+'\')">'
+      +'<td class="left" style="border-left:3px solid '+col+'">'
+      +'<span class="tog" id="tog_'+eid+'" data-open="0">&#9658;</span>'
+      +'<strong style="color:'+col+'">'+d.eq.id+'</strong>'
+      +' <span style="font-weight:400;font-size:11px;opacity:.8">'+d.eq.desc+'</span></td>'
+      +'<td class="left" style="font-size:11.5px;font-weight:400;opacity:.8">'+period+'</td>'
+      +'<td class="'+vc(d.ativoSum)+'">'+brl(d.ativoSum)+'</td>'
+      +'<td class="'+vc(d.passivoSum)+'">'+brl(d.passivoSum)+'</td>'
+      +'<td class="'+dCls+'" style="font-weight:800">'+brl(d.div)+'</td>'
       +'</tr>';
-    // detalhe: agrupa por conta, soma meses
-    const byAcctRows={};
-    d.rows.forEach(r=>{const a=String(r.COCONTACONTABIL);byAcctRows[a]=(byAcctRows[a]||0)+n(r.VLSALDO);});
-    const acctsSorted=Object.keys(byAcctRows).sort();
-    acctsSorted.forEach((acct,j)=>{
-      const vl=byAcctRows[acct];
-      const contaNome=CONTA_NAMES[acct]?' <span style="font-size:10px;opacity:.65">'+CONTA_NAMES[acct]+'</span>':'';
-      html+='<tr class="dr'+(j%2?' alt':'')+'" data-doc="'+did+'">'
-        +'<td></td>'
-        +'<td class="left" style="font-size:11px;padding-left:24px">'
-        +'<code style="font-size:11px;color:var(--navy)">'+acct+'</code>'+contaNome+'</td>'
-        +'<td class="'+(isAtivo(acct)?(Math.abs(vl)<0.005?'vz':vc(vl)):'vz')+'">'+(isAtivo(acct)&&Math.abs(vl)>=0.005?brl(vl):'\u2014')+'</td>'
-        +'<td class="'+(isPassivo(acct)?(Math.abs(vl)<0.005?'vz':vc(vl)):'vz')+'">'+(isPassivo(acct)&&Math.abs(vl)>=0.005?brl(vl):'\u2014')+'</td>'
-        +'<td class="vz">\u2014</td>'
+
+    const accts=contaFil?matchAccts:d.accts;
+    accts.forEach((a,j)=>{
+      const nome=CONTA_NAMES[a.acct]||'';
+      const av=a.side==='ativo'?a.vl:0;
+      const pv=a.side==='passivo'?a.vl:0;
+      html+='<tr class="row-acct'+(j%2?' alt':'')+'" data-par="'+eid+'" style="display:none">'
+        +'<td class="left"><code style="font-size:11.5px;color:var(--navy);font-weight:700">'+a.acct+'</code>'
+        +(nome?' <span style="color:var(--muted);font-size:11px">'+nome+'</span>':'')+'</td>'
+        +'<td class="left" style="font-size:11px;color:var(--muted)">'+period+'</td>'
+        +'<td class="'+(Math.abs(av)>=0.005?vc(av):'vz')+'">'+(Math.abs(av)>=0.005?brl(av):'&#8212;')+'</td>'
+        +'<td class="'+(Math.abs(pv)>=0.005?vc(pv):'vz')+'">'+(Math.abs(pv)>=0.005?brl(pv):'&#8212;')+'</td>'
+        +'<td class="vz">&#8212;</td>'
         +'</tr>';
     });
+
+    totA+=d.ativoSum;totP+=d.passivoSum;totD+=d.div;nEQ++;
   });
-  tb.innerHTML=html||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Nenhuma UG encontrada.</td></tr>';
-  const totA=filDocs.reduce((s,d)=>s+n(d.totAtivo),0);
-  const totP=filDocs.reduce((s,d)=>s+n(d.totPassivo),0);
-  const nDiv=filDocs.filter(d=>Math.abs(n(d.maxDiv))>=0.005).length;
-  tf.innerHTML='<td class="left">Total \u00b7 '+filDocs.length.toLocaleString('pt-BR')+' UG(s)</td>'
+
+  tb.innerHTML=html||'<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">Nenhum registro encontrado.</td></tr>';
+  tf.innerHTML='<td class="left">Total Geral &middot; '+nEQ+' equa\u00e7\u00e3o(es)</td>'
+    +'<td class="left" style="font-size:11px">'+period+'</td>'
     +'<td class="'+vc(totA)+'">'+brl(totA)+'</td>'
     +'<td class="'+vc(totP)+'">'+brl(totP)+'</td>'
-    +'<td class="'+(nDiv>0?'vp':'vz')+'" style="font-size:11px">'+(nDiv>0?nDiv.toLocaleString('pt-BR')+' com diverg.':'\u2014')+'</td>';
-  document.getElementById('ttitle').textContent=filDocs.length.toLocaleString('pt-BR')+' UG(s)';
-  paginar();
+    +'<td class="'+vc(totD)+'" style="font-weight:800">'+brl(totD)+'</td>';
+  document.getElementById('cnt').textContent=nEQ+' equa\u00e7\u00e3o(es) exibida(s) \u00b7 '+period;
+  kpis(totA,totP,totD);
 }
 
-function kpis(){
-  const totD1=filDocs.reduce((s,d)=>s+n(d.divEQ1),0);
-  const totD2=filDocs.reduce((s,d)=>s+n(d.divEQ2),0);
-  const totD3=filDocs.reduce((s,d)=>s+n(d.divEQ3),0);
-  const totD4=filDocs.reduce((s,d)=>s+n(d.divEQ4),0);
-  const totD5=filDocs.reduce((s,d)=>s+n(d.divEQ5),0);
-  const totD6=filDocs.reduce((s,d)=>s+n(d.divEQ6),0);
-  document.getElementById('kv-eq1').innerHTML='<span class="'+vc(totD1)+'">'+brl(totD1)+'</span>';
-  document.getElementById('kv-eq2').innerHTML='<span class="'+vc(totD2)+'">'+brl(totD2)+'</span>';
-  document.getElementById('kv-eq3').innerHTML='<span class="'+vc(totD3)+'">'+brl(totD3)+'</span>';
-  document.getElementById('kv-eq4').innerHTML='<span class="'+vc(totD4)+'">'+brl(totD4)+'</span>';
-  document.getElementById('kv-eq5').innerHTML='<span class="'+vc(totD5)+'">'+brl(totD5)+'</span>';
-  document.getElementById('kv-eq6').innerHTML='<span class="'+vc(totD6)+'">'+brl(totD6)+'</span>';
-  document.getElementById('kpi-eq1').className='kpi'+(Math.abs(totD1)>0.005?' ka':'');
-  document.getElementById('kpi-eq2').className='kpi'+(Math.abs(totD2)>0.005?' km':'');
-  document.getElementById('kpi-eq3').className='kpi'+(Math.abs(totD3)>0.005?' kg':'');
-  document.getElementById('kpi-eq4').className='kpi'+(Math.abs(totD4)>0.005?' kv4':'');
-  document.getElementById('kpi-eq5').className='kpi'+(Math.abs(totD5)>0.005?' kv5':'');
-  document.getElementById('kpi-eq6').className='kpi'+(Math.abs(totD6)>0.005?' kv6':'');
-}
-
-function paginar(){
-  const tot=filDocs.length,pages=Math.max(1,Math.ceil(tot/PG_SZ));
-  document.getElementById('pg-info').textContent='Pág. '+pg+' / '+pages;
-}
-function mudarPg(d){
-  const pages=Math.max(1,Math.ceil(filDocs.length/PG_SZ));
-  pg=Math.max(1,Math.min(pages,pg+d));render();
-}
-
-function filtrarEq(eq){
-  filterMode=filterMode===eq?'':eq;
-  ['eq1','eq2','eq3','eq4','eq5','eq6'].forEach(e=>{
-    document.getElementById('btn-'+e).classList.toggle('active',filterMode===e);
+function kpis(totA,totP,totD){
+  if(!curData)return;
+  const nDiv=curData.eqData.filter(d=>Math.abs(d.div)>=0.005).length;
+  const dcT=Math.abs(totD)<0.005?'ko':totD>0?'kw':'ka';
+  document.getElementById('krow-total').innerHTML=
+    '<div class="kpi-total-row">'
+    +'<div class="kpi"><div class="kl">Total Ativo</div><div class="kv '+vc(totA)+'">'+brl(totA)+'</div></div>'
+    +'<div class="kpi"><div class="kl">Total Passivo</div><div class="kv '+vc(totP)+'">'+brl(totP)+'</div></div>'
+    +'<div class="kpi '+dcT+'"><div class="kl">Diverg\u00eancia Total (P\u2212A)</div>'
+    +'<div class="kv '+vc(totD)+'">'+brl(totD)+'</div>'
+    +'<div class="ks"><span class="badge '+(nDiv>0?'br':'bg')+'">'+nDiv+' eq. c/ diverg\u00eancia</span></div></div>'
+    +'</div>';
+  let khtml='<div class="kpi-row">';
+  curData.eqData.forEach((d,i)=>{
+    const col=EQ_COLORS[i%EQ_COLORS.length];
+    const dc=Math.abs(d.div)<0.005?'ko':d.div>0?'kw':'ka';
+    khtml+='<div class="kpi-group">'
+      +'<div class="kpi-group-title" style="border-left:3px solid '+col+'">'
+      +d.eq.id+'<span style="font-weight:400;margin-left:8px;opacity:.65;font-size:8.5px;text-transform:none">'+d.eq.desc+'</span></div>'
+      +'<div class="kpi-group-inner">'
+      +'<div class="kpi"><div class="kl">Ativo</div><div class="kv '+vc(d.ativoSum)+'">'+brl(d.ativoSum)+'</div></div>'
+      +'<div class="kpi"><div class="kl">Passivo</div><div class="kv '+vc(d.passivoSum)+'">'+brl(d.passivoSum)+'</div></div>'
+      +'<div class="kpi '+dc+'"><div class="kl">Diverg\u00eancia</div><div class="kv '+vc(d.div)+'">'+brl(d.div)+'</div></div>'
+      +'</div></div>';
   });
-  aplicar();
-}
-function limpar(){
-  filterMode='';ugSel='';
-  document.getElementById('ac-ug').value='';
-  document.getElementById('ac-clr').style.display='none';
-  ['eq1','eq2','eq3','eq4','eq5','eq6'].forEach(e=>document.getElementById('btn-'+e).classList.remove('active'));
-  aplicar();
+  khtml+='</div>';
+  document.getElementById('krow').innerHTML=khtml;
 }
 
-function exportCSV(){
-  const mesRef=mesSel?'Até '+(MESES_PT[Number(mesSel)]||mesSel):'Ano completo';
-  const hdr=['Gestao','COUG','Nome UG','Periodo','Ativo','Passivo','Divergencia'];
-  const rows=filDocs.map(d=>[
-    fmtG(d.COGESTAO),String(d.COUG),UG_NAMES[String(d.COUG)]||'',
-    mesRef,
-    n(d.totAtivo).toFixed(2),n(d.totPassivo).toFixed(2),
-    n(d.maxDiv).toFixed(2)
-  ]);
+function toggleKpis(el){
+  const body=document.getElementById('krow');
+  const arrow=document.getElementById('kpi-arrow');
+  const open=body.classList.toggle('open');
+  arrow.classList.toggle('open',open);
+}
+
+function toggle(id){
+  const tog=document.getElementById('tog_'+id);
+  if(!tog)return;
+  const expanded=tog.dataset.open==='1';
+  document.querySelectorAll('[data-par="'+id+'"]').forEach(tr=>tr.style.display=expanded?'none':'');
+  tog.dataset.open=expanded?'0':'1';
+  tog.textContent=expanded?'►':'▼';
+}
+function expandirTudo(){
+  document.querySelectorAll('[data-par]').forEach(tr=>tr.style.display='');
+  document.querySelectorAll('.tog').forEach(el=>{el.textContent='▼';el.dataset.open='1';});
+}
+function recolherTudo(){
+  document.querySelectorAll('[data-par]').forEach(tr=>tr.style.display='none');
+  document.querySelectorAll('.tog').forEach(el=>{el.textContent='►';el.dataset.open='0';});
+}
+
+function onContaInput(){
+  const v=document.getElementById('fc-input').value.trim();
+  contaFil=v;
+  document.getElementById('fc-clear').style.display=v?'block':'none';
+  const dd=document.getElementById('fc-dd');
+  if(!v){dd.style.display='none';aplicar();return;}
+  const q=v.toLowerCase();
+  const matches=Object.entries(CONTA_NAMES)
+    .filter(([k,nm])=>k.includes(q)||nm.toLowerCase().includes(q)).slice(0,20);
+  if(!matches.length){
+    dd.innerHTML='<div class="ac-dd-empty">Nenhuma conta encontrada</div>';
+    dd.style.display='block';
+  } else {
+    dd.innerHTML=matches.map(([k,nm])=>'<div class="ac-dd-item" onmousedown="selConta(\''+k+'\')">'
+      +'<strong>'+k+'</strong> \u2014 '+nm+'</div>').join('');
+    dd.style.display='block';
+  }
+  aplicar();
+}
+function selConta(code){
+  const nm=CONTA_NAMES[code]||'';
+  contaFil=code;
+  document.getElementById('fc-input').value=code+(nm?' \u2014 '+nm:'');
+  document.getElementById('fc-clear').style.display='block';
+  document.getElementById('fc-dd').style.display='none';
+  aplicar();
+}
+function limContaFil(){
+  contaFil='';
+  document.getElementById('fc-input').value='';
+  document.getElementById('fc-clear').style.display='none';
+  document.getElementById('fc-dd').style.display='none';
+  aplicar();
+}
+document.addEventListener('click',e=>{
+  if(!e.target.closest('.ac-wrap'))document.getElementById('fc-dd').style.display='none';
+});
+
+function limpar(){
+  const meses=[...new Set(window.ALL.map(r=>n(r.INMES)))].sort((a,b)=>a-b);
+  document.getElementById('fm').value=meses[meses.length-1]||'';
+  document.getElementById('fs').value='todos';
+  limContaFil();
+}
+
+function exportar(){
+  if(!curData)return;
+  const period=mesLabel(document.getElementById('fm').value);
+  const hdr=['Equacao','Descricao','Conta','Nome Conta','Tipo','Periodo','Ativo','Passivo','Divergencia'];
+  const rows=[];
+  curData.eqData.forEach(d=>{
+    rows.push([d.eq.id,d.eq.desc,'','','',period,d.ativoSum.toFixed(2),d.passivoSum.toFixed(2),d.div.toFixed(2)]);
+    d.accts.forEach(a=>{
+      const av=a.side==='ativo'?a.vl:0;
+      const pv=a.side==='passivo'?a.vl:0;
+      rows.push([d.eq.id,'',a.acct,CONTA_NAMES[a.acct]||'',a.side,period,av.toFixed(2),pv.toFixed(2),'']);
+    });
+  });
   const csv=[hdr,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
   const a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);
-  a.download='correspondencia_saldo.csv';a.click();
+  a.download='correspondencia_saldo_consolidado.csv';a.click();
 }
-
-document.getElementById('loading').classList.add('show');
 </script>
 </body>
 </html>
@@ -560,17 +558,13 @@ document.getElementById('loading').classList.add('show');
 def extrair():
     oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT_DIR)
     with oracledb.connect(user=ORACLE_USER, password=ORACLE_PASS, dsn=ORACLE_DSN) as conn:
-        df       = pd.read_sql(SQL,        conn)
-        df_ug    = pd.read_sql(SQL_UG,     conn)
-        df_gest  = pd.read_sql(SQL_GESTAO, conn)
-        df_conta = pd.read_sql(SQL_CONTA,  conn)
-    ug_names     = dict(zip(df_ug["COUG"].astype(str),         df_ug["NOUG"]))
-    gestao_names = dict(zip(df_gest["COGESTAO"].astype(str),   df_gest["NOGESTAO"]))
-    conta_names  = dict(zip(df_conta["COCONTACONTABIL"].astype(str), df_conta["NOCONTACONTABIL"]))
-    return df, ug_names, gestao_names, conta_names
+        df       = pd.read_sql(SQL,       conn)
+        df_conta = pd.read_sql(SQL_CONTA, conn)
+    conta_names = dict(zip(df_conta["COCONTACONTABIL"].astype(str), df_conta["NOCONTACONTABIL"]))
+    return df, conta_names
 
 # ── gerar_html ────────────────────────────────────────────────────────────────
-def gerar_html(df, ug_names, gestao_names, conta_names):
+def gerar_html(df, conta_names):
     cols = list(df.columns)
     rows = []
     for r in df.itertuples(index=False):
@@ -583,15 +577,11 @@ def gerar_html(df, ug_names, gestao_names, conta_names):
     payload   = {"cols": cols, "rows": rows}
     json_str  = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     dados_b64 = base64.b64encode(gzip.compress(json_str.encode("utf-8"), compresslevel=9)).decode()
-    eq_js      = json.dumps(EQUACOES,     ensure_ascii=False)
-    ug_js      = json.dumps(ug_names,     ensure_ascii=False)
-    gestao_js  = json.dumps(gestao_names, ensure_ascii=False)
-    conta_js   = json.dumps(conta_names,  ensure_ascii=False)
-    ts         = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+    eq_js     = json.dumps(EQUACOES,    ensure_ascii=False)
+    conta_js  = json.dumps(conta_names, ensure_ascii=False)
+    ts        = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     html = HTML_TEMPLATE
     html = html.replace("__EQUACOES__",    eq_js)
-    html = html.replace("__UG_NAMES__",    ug_js)
-    html = html.replace("__GESTAO_NAMES__",gestao_js)
     html = html.replace("__CONTA_NAMES__", conta_js)
     html = html.replace("'__DADOS__'",     "'" + dados_b64 + "'")
     html = html.replace("__TIMESTAMP__",   ts)
@@ -607,13 +597,15 @@ def publicar(html: str, no_push: bool):
         return
     cmds = [
         ["git", "-C", str(PASTA), "add", ARQUIVO_HTML],
-        ["git", "-C", str(PASTA), "commit", "-m", f"atualiza {ARQUIVO_HTML}"],
+        ["git", "-C", str(PASTA), "commit", "-m", f"auto: atualiza {ARQUIVO_HTML}"],
         ["git", "-C", str(PASTA), "push"],
     ]
     for cmd in cmds:
         r = subprocess.run(cmd, capture_output=True, text=True)
         if r.returncode != 0 and "nothing to commit" not in r.stdout + r.stderr:
             print(f"  Aviso git: {r.stderr.strip()}")
+        elif r.returncode == 0 and cmd[3] == "push":
+            print(f"  Publicado: https://controles-contabeis-df.github.io/controles-contabeis/{ARQUIVO_HTML}")
 
 # ── main ──────────────────────────────────────────────────────────────────────
 def main():
@@ -622,20 +614,19 @@ def main():
     args = parser.parse_args()
     no_push = args.no_push or bool(os.environ.get("NO_GIT_PUSH"))
 
-    print("Correspondência Ativo x Passivo — por Saldo...")
-    print("[1/3] Conectando ao Oracle...")
-    df, ug_names, gestao_names, conta_names = extrair()
-    print(f"  {len(df):,} linhas ({df['COUG'].nunique()} UGs, {df['INMES'].nunique()} meses).")
-    print("[2/3] Gerando HTML...")
-    html = gerar_html(df, ug_names, gestao_names, conta_names)
+    print(f"[{datetime.now():%H:%M:%S}] Correspondência Ativo x Passivo — por Saldo Consolidado…")
+    print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle…")
+    df, conta_names = extrair()
+    print(f"  {len(df):,} linhas ({df['INMES'].nunique()} meses).")
+    print(f"[{datetime.now():%H:%M:%S}] Gerando HTML…")
+    html = gerar_html(df, conta_names)
     j = json.dumps({"cols": list(df.columns), "rows": df.values.tolist()},
                    ensure_ascii=False, separators=(",", ":"))
-    raw_kb = len(j.encode()) // 1024
+    raw_kb  = len(j.encode()) // 1024
     comp_kb = len(gzip.compress(j.encode(), compresslevel=9)) // 1024
-    print(f"  JSON: {raw_kb} KB -> comprimido: {comp_kb} KB")
-    print("[3/3] Salvando...")
+    print(f"  JSON: {raw_kb} KB → comprimido: {comp_kb} KB")
     publicar(html, no_push)
-    print("Concluido.")
+    print(f"[{datetime.now():%H:%M:%S}] Concluído.")
 
 if __name__ == "__main__":
     main()
