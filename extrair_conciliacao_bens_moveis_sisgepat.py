@@ -195,10 +195,7 @@ def mes_anterior():
 
 
 def extrair(mes, ano):
-    if mes == 12:
-        data_corte = date(ano + 1, 1, 1)
-    else:
-        data_corte = date(ano, mes + 1, 1)
+    data_corte = date.today()
 
     print(f"[{datetime.now():%H:%M:%S}] Conectando ao Oracle...")
     oracledb.init_oracle_client(lib_dir=INSTANT_CLIENT_DIR)
@@ -265,11 +262,12 @@ def gerar_html(df, mes, ano, data_corte):
         })
 
     meta = {
-        "mes_label": MESES[mes],
-        "mes_num":   mes,
-        "ano":       ano,
-        "gerado_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
-        "data_corte":data_corte.strftime("%d/%m/%Y"),
+        "mes_label":      MESES[mes],
+        "mes_num":        mes,
+        "ano":            ano,
+        "gerado_em":      datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "data_corte":     data_corte.strftime("%d/%m/%Y"),
+        "data_extracao":  data_corte.strftime("%d/%m/%Y"),
     }
 
     def b64gz(obj):
@@ -367,7 +365,7 @@ tr.grp-l2:hover td{{background:var(--hover)!important}}
 </header>
 <div class="krow" id="krow"></div>
 <div class="fbar">
-  <div class="fg"><label>M&#234;s de Refer&#234;ncia</label>
+  <div class="fg"><label>Data de Extra&#231;&#227;o</label>
     <div class="mes-badge" id="mes-ref">—</div>
   </div>
   <div class="fg"><label>Unidade Gestora</label>
@@ -488,7 +486,7 @@ function exportar(){{if(!fil.length)return alert('Nenhum dado para exportar.');c
     '<div class="kpi"><div class="kl">SIGGO</div><div class="kv" id="kv-sig">—</div><div class="ks" id="ks-sig"></div></div>'+
     '<div class="kpi"><div class="kl">SISGEPAT</div><div class="kv" id="kv-sis">—</div><div class="ks" id="ks-sis"></div></div>'+
     '<div class="kpi ka" id="kpi-dif"><div class="kl">Diverg&#234;ncias</div><div class="kv" id="kv-dif">—</div><div class="ks" id="ks-dif"></div></div>';
-  document.getElementById('mes-ref').textContent=meta.mes_label+'/'+meta.ano;
+  document.getElementById('mes-ref').textContent=meta.data_extracao;
   acState={{
     'u':{{sel:'',list:buildList(r=>r.COUG,r=>r.UG_LABEL),inp:'fu-input',clr:'fu-clear',dd:'fu-dd'}},
     's':{{sel:'',list:buildList(r=>r.SUBITEM,r=>r.SUB_LABEL),inp:'fs-input',clr:'fs-clear',dd:'fs-dd'}}
@@ -525,8 +523,9 @@ def publicar(html, no_push):
 # ── Principal ─────────────────────────────────────────────────────────────────
 
 def main():
+    hoje = date.today()
     ap = argparse.ArgumentParser()
-    mes_def, ano_def = mes_anterior()
+    mes_def, ano_def = hoje.month, hoje.year
     ap.add_argument("--mes",     type=int, default=mes_def)
     ap.add_argument("--ano",     type=int, default=ano_def)
     ap.add_argument("--no-push", action="store_true")
