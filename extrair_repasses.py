@@ -45,7 +45,6 @@ SQL = """
 WITH fontes AS (
     SELECT COFONTE, COFONTEFEDERAL
     FROM {schema}FONTERECURSO
-    WHERE INFONTETESOURO = 'S'
 ),
 repasse AS (
     SELECT COGESTAO, COUG, COFONTE, GND,
@@ -56,8 +55,8 @@ repasse AS (
                SUBSTR(s.COCONTACORRENTE, 16, 1) AS GND,
                SUM(s.VACREDITO - s.VADEBITO)    AS VALOR_REPASSE
         FROM {schema}VSALDOCONTABIL s
-        INNER JOIN fontes f ON TO_NUMBER(f.COFONTE) = TO_NUMBER(SUBSTR(s.COCONTACORRENTE, 7, 9))
         WHERE s.COCONTACONTABIL IN (961210200, 961210300, 961210500)
+          AND SUBSTR(s.COCONTACORRENTE, 7, 1) NOT IN ('2', '4')
           {filtro_ug}
           {filtro_mes}
         GROUP BY s.COGESTAO, s.COUG,
@@ -69,8 +68,8 @@ repasse AS (
                SUBSTR(s.COCONTACORRENTE, 10, 1) AS GND,
                SUM(s.VACREDITO - s.VADEBITO)    AS VALOR_REPASSE
         FROM {schema}VSALDOCONTABIL s
-        INNER JOIN fontes f ON TO_NUMBER(f.COFONTE) = TO_NUMBER(SUBSTR(s.COCONTACORRENTE, 1, 9))
         WHERE s.COCONTACONTABIL = 961210600
+          AND SUBSTR(s.COCONTACORRENTE, 1, 1) NOT IN ('2', '4')
           {filtro_ug}
           {filtro_mes}
         GROUP BY s.COGESTAO, s.COUG,
@@ -87,8 +86,8 @@ liquidacao AS (
         SUBSTR(s.COCONTACORRENTE, 34, 1)         AS GND,
         ROUND(SUM(s.VACREDITO - s.VADEBITO), 2) AS VALOR_LIQ
     FROM {schema}VSALDOCONTABIL s
-    INNER JOIN fontes f ON TO_NUMBER(f.COFONTE) = TO_NUMBER(SUBSTR(s.COCONTACORRENTE, 24, 9))
     WHERE s.COCONTACONTABIL IN (622130300, 622130400)
+      AND SUBSTR(s.COCONTACORRENTE, 24, 1) NOT IN ('2', '4')
       {filtro_ug}
       {filtro_mes}
     GROUP BY s.COGESTAO, s.COUG,
