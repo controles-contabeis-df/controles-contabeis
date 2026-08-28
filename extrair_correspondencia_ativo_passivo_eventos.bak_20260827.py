@@ -1,5 +1,5 @@
 """
-Correspondência UG Ativo × Passivo — EQ1–EQ19
+Correspondência UG Ativo × Passivo — Painel Unificado de Validação EQ1–EQ15
 Consolida as equações do painel de saldo (EQ1–EQ6) com as equações derivadas
 dos Roteiros de Evento (EQ7–EQ15), identificadas via cruzamento EVENTO×EVENTOROTEIRO.
 
@@ -17,17 +17,14 @@ Equações monitoradas:
   EQ11: 214220600 = 112120201                       (Taxa de licença)
   EQ12: 214229900 = 112120103                       (Outros tributos e contribuições)
   EQ13: 218921300 = 113129907                       (Indenizações — série específica)
-  EQ14: 218924015 = 112321000                       (Recursos a Liberar/Receber — Subvenções)
-  EQ15: 228924015 = 121129701                       (Recursos a Liberar/Receber — Subvenções Intra-OFSS)
-  EQ16: 218924003 = 112320400                       (Recursos a Liberar/Receber — RAP Processado)
-  EQ17: 218920102+218820199+218820403+218820430+213120199
+  EQ14: 218920102+218820199+218820403+218820430+213120199
         +218924004+218924016+218924018 = 113829900+113821200
         (Setorial Financeira 130101 — última; divergência estrutural esperada)
 
-Nota: 218924019 consta somente em EQ6 — não incluída em EQ17 para evitar dupla contagem.
+Nota: 218924019 consta somente em EQ6 — removida de EQ14 para evitar dupla contagem.
 
 Uso:
-    python extrair_correspondencia_ativo_passivo_saldo.py [--no-push]
+    python extrair_correspondencia_ativo_passivo_eventos.py [--no-push]
 """
 import argparse, base64, gzip, json, os, re, subprocess, sys
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -45,7 +42,7 @@ ORACLE_USER  = os.environ["ORACLE_USER"]
 ORACLE_PASS  = os.environ["ORACLE_PASS"]
 ORACLE_DSN   = os.environ["ORACLE_DSN"]
 SCHEMA       = "MIL2026."
-ARQUIVO_HTML = "correspondencia_ativo_passivo_saldo.html"
+ARQUIVO_HTML = "correspondencia_ativo_passivo_eventos.html"
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
 MESES = {0:"Saldo Inicial",1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
@@ -53,116 +50,70 @@ MESES = {0:"Saldo Inicial",1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Mai
 
 EQUACOES = [
     # ── EQ1–EQ6: herdadas do painel de saldo ─────────────────────────────────
-    # ── EQ1–EQ6: herdadas do painel de saldo ─────────────────────────────────
-    {"id": "EQ1",  "label": "Contrib. RPPS — Patronal",
-     "desc": "21142XXXX = 113620101 + 113620103",
+    {"id": "EQ1", "desc": "21142XXXX = 113620101 + 113620103",
      "passivo_exact": [], "passivo_prefix": "21142",
      "ativo": [113620101, 113620103]},
-    {"id": "EQ2",  "label": "Contrib. RPPS — Servidor",
-     "desc": "218820101 = 113620102 + 113620104",
+    {"id": "EQ2", "desc": "218820101 = 113620102 + 113620104",
      "passivo_exact": [218820101], "passivo_prefix": None,
      "ativo": [113620102, 113620104]},
-    {"id": "EQ3",  "label": "IRRF",
-     "desc": "218820104 = 112120101",
+    {"id": "EQ3", "desc": "218820104 = 112120101",
      "passivo_exact": [218820104], "passivo_prefix": None,
      "ativo": [112120101]},
-    {"id": "EQ4",  "label": "ICMS",
-     "desc": "218820107 = 112120104",
+    {"id": "EQ4", "desc": "218820107 = 112120104",
      "passivo_exact": [218820107], "passivo_prefix": None,
      "ativo": [112120104]},
-    {"id": "EQ5",  "label": "ISS",
-     "desc": "214320100+214325100+218820108+218827005 = 112120107",
+    {"id": "EQ5", "desc": "214320100+214325100+218820108+218827005 = 112120107",
      "passivo_exact": [214320100, 214325100, 218820108, 218827005], "passivo_prefix": None,
      "ativo": [112120107]},
-    {"id": "EQ6",  "label": "DREM",
-     "desc": "218924019 = 112322200",
+    {"id": "EQ6", "desc": "218924019 = 112322200",
      "passivo_exact": [218924019], "passivo_prefix": None,
      "ativo": [112322200]},
 
-    # ── EQ7–EQ18: derivadas dos roteiros de evento ────────────────────────────
-    {"id": "EQ7",  "label": "Fornecedores",
-     "desc": "213120101+213125101 = 112220100+112120202+113821300+113824500",
+    # ── EQ7–EQ14: derivadas dos roteiros de evento ────────────────────────────
+    # EQ7: 213125101 adicionado ao passivo após diagnóstico de divergência
+    {"id": "EQ7",  "desc": "213120101+213125101 = 112220100+112120201+112120202+113821300+113824500",
      "passivo_exact": [213120101, 213125101], "passivo_prefix": None,
-     "ativo": [112220100, 112120202, 113821300, 113824500]},
+     "ativo": [112220100, 112120201, 112120202, 113821300, 113824500]},
 
-    {"id": "EQ8",  "label": "Infrações Legais e Contratuais",
-     "desc": "218920400 = 113820700",
+    {"id": "EQ8",  "desc": "218920500 = 112322100",
+     "passivo_exact": [218920500], "passivo_prefix": None,
+     "ativo": [112322100]},
+
+    {"id": "EQ9",  "desc": "218920400 = 113820700",
      "passivo_exact": [218920400], "passivo_prefix": None,
      "ativo": [113820700]},
 
-    {"id": "EQ9",  "label": "IPTU / TLP",
-     "desc": "214320200 = 112120105",
+    {"id": "EQ10", "desc": "214320200 = 112120105",
      "passivo_exact": [214320200], "passivo_prefix": None,
      "ativo": [112120105]},
 
-    # EQ10: ex-EQ19 (ISS a Compensar — par de ativos que se anulam intra-OFSS)
-    # 112920101 é contra-ativo; saldo negativo cancela 113220700 na consolidação.
-    {"id": "EQ10", "label": "ISS a Compensar",
-     "desc": "113220700 + 112920101 = 0",
-     "passivo_exact": [], "passivo_prefix": None,
-     "ativo": [113220700, 112920101]},
-
-    {"id": "EQ11", "label": "Outros Tributos Estaduais",
-     "desc": "214229900 = 112120103",
-     "passivo_exact": [214229900], "passivo_prefix": None,
-     "ativo": [112120103]},
-
-    # EQ12: convênios consolidados — 218920500+218921300+218926300 reunidos para
-    # evitar dupla contagem dos ativos 112322100 e 113129907.
-    {"id": "EQ12", "label": "Convênios",
-     "desc": "218920500+218921300+218926300 = 112322100+113129907",
-     "passivo_exact": [218920500, 218921300, 218926300], "passivo_prefix": None,
-     "ativo": [112322100, 113129907]},
-
-    {"id": "EQ13", "label": "Subvenções",
-     "desc": "218924015 = 112321000",
-     "passivo_exact": [218924015], "passivo_prefix": None,
-     "ativo": [112321000]},
-
-    {"id": "EQ14", "label": "Subvenções IPREV",
-     "desc": "228924015 = 121129701",
-     "passivo_exact": [228924015], "passivo_prefix": None,
-     "ativo": [121129701]},
-
-    {"id": "EQ15", "label": "RPP a Liberar",
-     "desc": "218924003 = 112320400",
-     "passivo_exact": [218924003], "passivo_prefix": None,
-     "ativo": [112320400]},
-
-    {"id": "EQ16", "label": "RPNP a Liberar",
-     "desc": "218924001 = 112320500",
-     "passivo_exact": [218924001], "passivo_prefix": None,
-     "ativo": [112320500]},
-
-    {"id": "EQ17", "label": "Fundo Previdenciário",
-     "desc": "228921600 = 121229847",
-     "passivo_exact": [228921600], "passivo_prefix": None,
-     "ativo": [121229847]},
-
-    # EQ18: Taxa de Licenciamento de Veículos — separada de EQ7 (Fornecedores)
-    # por ter natureza tributária distinta.
-    {"id": "EQ18", "label": "Taxa Licenc. Veículos",
-     "desc": "214220600 = 112120201",
+    {"id": "EQ11", "desc": "214220600 = 112120201",
      "passivo_exact": [214220600], "passivo_prefix": None,
      "ativo": [112120201]},
 
-    # EQ19: Setorial Financeira UG 130101 — última; divergência estrutural esperada.
-    # 218924019 em EQ6 apenas (evita dupla contagem).
-    {"id": "EQ19", "label": "Outros",
-     "desc": "218920102+218820199+218820403+218820430+213120199+213125199"
-             "+218924004+218924016+218924018 = "
-             "113829900+113821200+112321700+112320700+112321300+112120199",
-     "passivo_exact": [218920102, 218820199, 218820403, 218820430, 213120199, 213125199,
+    {"id": "EQ12", "desc": "214229900 = 112120103",
+     "passivo_exact": [214229900], "passivo_prefix": None,
+     "ativo": [112120103]},
+
+    {"id": "EQ13", "desc": "218921300 = 113129907",
+     "passivo_exact": [218921300], "passivo_prefix": None,
+     "ativo": [113129907]},
+
+    # EQ14: Setorial Financeira UG 130101 — passivos intra + série 218924XXX.
+    # 218924019 foi mantida em EQ6 apenas (evita dupla contagem no total geral).
+    # Divergência esperada no par (130101×130101): limitação estrutural de registro
+    # da Setorial — o passivo correspondente está parcialmente em EQ3 e EQ6.
+    {"id": "EQ14",
+     "desc": "218920102+218820199+218820403+218820430+213120199+218924004+218924016+218924018 = 113829900+113821200",
+     "passivo_exact": [218920102, 218820199, 218820403, 218820430, 213120199,
                        218924004, 218924016, 218924018],
      "passivo_prefix": None,
-     "ativo": [113829900, 113821200, 112321700, 112320700, 112321300, 112120199]},
+     "ativo": [113829900, 113821200]},
 ]
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
 _CONTAS_EXATAS = sorted({c for eq in EQUACOES for c in eq["passivo_exact"]})
 _PREFIXOS      = [eq["passivo_prefix"] for eq in EQUACOES if eq["passivo_prefix"]]
-# passivo_flip: contas classe 1 que entram como "P" com sinal negado (contra-ativos)
-_CONTAS_FLIP_EXTRA = sorted({c for eq in EQUACOES for c in eq.get("passivo_flip", [])})
 
 _CONTA_META: dict[str, list[tuple[str, str]]] = {}
 for eq in EQUACOES:
@@ -170,18 +121,12 @@ for eq in EQUACOES:
         _CONTA_META.setdefault(str(c), []).append((eq["id"], "A"))
     for c in eq["passivo_exact"]:
         _CONTA_META.setdefault(str(c), []).append((eq["id"], "P"))
-    for c in eq.get("passivo_flip", []):
-        _CONTA_META.setdefault(str(c), []).append((eq["id"], "P"))
-
-# Contas flip por equação (para negação de sinal)
-_FLIP_SET: set[str] = {str(c) for eq in EQUACOES for c in eq.get("passivo_flip", [])}
 
 
 def _where_contas() -> str:
     parts = []
-    todas = sorted(set(_CONTAS_ATIVO + _CONTAS_EXATAS + _CONTAS_FLIP_EXTRA))
-    if todas:
-        lst = ",".join(str(c) for c in todas)
+    if _CONTAS_ATIVO + _CONTAS_EXATAS:
+        lst = ",".join(str(c) for c in sorted(_CONTAS_ATIVO + _CONTAS_EXATAS))
         parts.append(f"v.COCONTACONTABIL IN ({lst})")
     for pfx in _PREFIXOS:
         lo = int(pfx) * 10**(9 - len(pfx))
@@ -191,9 +136,8 @@ def _where_contas() -> str:
 
 def _sql_conta() -> str:
     parts = []
-    todas = sorted(set(_CONTAS_ATIVO + _CONTAS_EXATAS + _CONTAS_FLIP_EXTRA))
-    if todas:
-        lst = ",".join(str(c) for c in todas)
+    if _CONTAS_ATIVO + _CONTAS_EXATAS:
+        lst = ",".join(str(c) for c in sorted(_CONTAS_ATIVO + _CONTAS_EXATAS))
         parts.append(f"COCONTACONTABIL IN ({lst})")
     for pfx in _PREFIXOS:
         lo = int(pfx) * 10**(9 - len(pfx))
@@ -205,17 +149,10 @@ def _sql_conta() -> str:
 SQL = f"""
 SELECT
   v.INMES,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(TO_CHAR(v.COUG), 6, '0')
-    ELSE LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0')
-  END                                           AS UG_PROPRIO,
+  LPAD(TO_CHAR(v.COUG),     6, '0') || '-' ||
+  LPAD(TO_CHAR(v.COGESTAO), 5, '0')            AS UG_PROPRIO,
   TO_CHAR(v.COCONTACONTABIL)                    AS COCONTACONTABIL,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), 1, 6), 6, '0')
-    ELSE SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
-  END                                           AS UG_CONTRAPARTE,
+  SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12) AS UG_CONTRAPARTE,
   ROUND(SUM(
     CASE SUBSTR(TO_CHAR(v.COCONTACONTABIL), 1, 1)
       WHEN '1' THEN v.VADEBITO  - v.VACREDITO
@@ -228,17 +165,9 @@ WHERE ({_where_contas()})
   AND LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) >= 12
 GROUP BY
   v.INMES,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(TO_CHAR(v.COUG), 6, '0')
-    ELSE LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0')
-  END,
+  LPAD(TO_CHAR(v.COUG),     6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0'),
   TO_CHAR(v.COCONTACONTABIL),
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), 1, 6), 6, '0')
-    ELSE SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
-  END
+  SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
 HAVING ROUND(SUM(
     CASE SUBSTR(TO_CHAR(v.COCONTACONTABIL), 1, 1)
       WHEN '1' THEN v.VADEBITO  - v.VACREDITO
@@ -253,8 +182,7 @@ SQL_CONTA = f"""SELECT TO_CHAR(COCONTACONTABIL) AS COCONTACONTABIL,
                        TRIM(NOCONTACONTABIL)     AS NOCONTACONTABIL
 FROM {SCHEMA}VCONTACONTABIL WHERE {_sql_conta()}"""
 
-# Aceita UG completa (XXXXXX-XXXXX) ou apenas COUG (XXXXXX) — para CC de 16 chars (INCONTACORRENTE=24)
-_UG_RE = re.compile(r"^\d{6}(-\d{5})?$")
+_UG_RE = re.compile(r"^\d{6}-\d{5}$")
 
 
 def extrair():
@@ -283,15 +211,11 @@ def extrair():
     # Explode: uma conta pode pertencer a múltiplas equações (ex: 113829900)
     expanded = []
     for _, row in df.iterrows():
-        ct = str(int(row["COCONTACONTABIL"]))
-        pares = _eq_lado(ct)
+        pares = _eq_lado(str(int(row["COCONTACONTABIL"])))
         for eq_id, lado in pares:
             r = row.to_dict()
             r["EQ"]   = eq_id
             r["LADO"] = lado
-            # Contas contra-ativo tratadas como passivo: inverter sinal
-            if lado == "P" and ct in _FLIP_SET:
-                r["VLSALDO"] = -r["VLSALDO"]
             expanded.append(r)
 
     df2 = pd.DataFrame(expanded) if expanded else pd.DataFrame(
@@ -419,13 +343,20 @@ tfoot tr td.left{text-align:left}
 <header>
   <div style="display:flex;align-items:center">
     <div class="hlogo">&#9878;</div>
-    <h1>Correspond&#234;ncia &#8212; Ativo &#215; Passivo
-      <span>SIGGO &#183; Exerc&#237;cio 2026</span>
+    <h1>Correspond&#234;ncia &#8212; Ativo &#215; Passivo &#8212; Painel Unificado
+      <span>SIGGO &#183; Exerc&#237;cio 2026 &#183; EQ1&#8211;EQ14 &#8226; Valida&#231;&#227;o</span>
     </h1>
   </div>
   <span id="ts">__TIMESTAMP__</span>
 </header>
 
+<div class="aviso">
+  <strong>&#9888; Painel de valida&#231;&#227;o &#8212; EQ1&#8211;EQ14.</strong>
+  <strong>EQ14 &#8212; Setorial Financeira (UG 130101):</strong> diverg&#234;ncia estrutural esperada.
+  O ativo 113829900 registra o pr&#243;prio c&#243;digo como contraparte; o passivo correspondente
+  est&#225; em outras UGs &#8212; parte j&#225; capturada em EQ3 e EQ6, parte na s&#233;rie 218924XXX de EQ14.
+  O par (130101&#x2194;130101) aparece no ativo sem contrapartida de passivo na mesma chave de agrupamento &#8212; isso &#233; inerente ao padr&#227;o de registro da Setorial, n&#227;o erro cont&#225;bil.
+</div>
 
 <div class="fbar">
   <div class="fg">
@@ -472,7 +403,7 @@ tfoot tr td.left{text-align:left}
 <div class="kpi-section">
   <div class="kpi-body open" id="krow-total"></div>
   <div class="kpi-toggle" onclick="toggleKpis(this)">
-    <span class="kpi-toggle-arrow" id="kpi-arrow">&#9654;</span>
+    <span class="kpi-toggle-arrow" id="kpi-arrow">&#9658;</span>
     Detalhar por equa&#231;&#227;o
   </div>
   <div class="kpi-body" id="krow"></div>
@@ -500,12 +431,8 @@ const EQUACOES     = __EQUACOES__;
 const CONTA_NAMES  = __CONTA_NAMES__;
 const MESES_PT = {0:'Saldo Inicial',1:'Janeiro',2:'Fevereiro',3:'Mar\u00e7o',4:'Abril',5:'Maio',6:'Junho',
                   7:'Julho',8:'Agosto',9:'Setembro',10:'Outubro',11:'Novembro',12:'Dezembro'};
-const EQ_COLORS = [
-  '#B8A8D8','#A8B4E8','#A0CCF0','#8ED8F0','#8EE4D8',
-  '#A0E4A4','#C0ECA0','#F8F0A8','#F8DC90','#FFB89C',
-  '#FFA894','#FFB0C8','#EEB4E0','#DDB8D8','#C8B8E8',
-  '#B4C8F4','#9ED8F0','#AAEAC8'
-];
+const EQ_COLORS = ['var(--red)','var(--amber)','#2e7d32','#5e35b1','#e65100','#00695c',
+                   '#0277bd','#6d4c41','#37474f','#ad1457','#558b2f','#4527a0','var(--teal)'];
 
 function decomp(b64){
   const s=b64.replace(/-/g,'+').replace(/_/g,'/');
@@ -668,8 +595,7 @@ function aplicar(){
 
   curData.forEach((d,i)=>{
     const filtPairs=d.pairs.filter(pairMatchFil);
-    const hasFilter=!!(ugFil||contaFil);
-    if(!filtPairs.length&&hasFilter)return;
+    if(!filtPairs.length)return;
     const eqTotA=filtPairs.reduce((s,p)=>s+p.sa,0);
     const eqTotP=filtPairs.reduce((s,p)=>s+p.sp,0);
     const eqDiv =Math.round((eqTotA-eqTotP)*100)/100;
@@ -681,11 +607,10 @@ function aplicar(){
     const dCls=Math.abs(eqDiv)<0.005?'vz':eqDiv>0?'vp':'vn';
 
     html+='<tr class="row-eq" onclick="toggle(\''+eid+'\')">'
-      +'<td class="left" colspan="2" style="border-left:3px solid '+col+';white-space:normal;min-width:0;max-width:360px">'
-      +'<span class="tog" id="tog_'+eid+'">&#9654;</span>'
+      +'<td class="left" colspan="2" style="border-left:3px solid '+col+'">'
+      +'<span class="tog" id="tog_'+eid+'">&#9658;</span>'
       +'<strong style="color:'+col+'">'+d.eq.id+'</strong>'
-      +(d.eq.label?'<span style="font-weight:600;font-size:11.5px;margin-left:7px;color:'+col+'">'+d.eq.label+'</span>':'')
-      +'<div style="font-weight:400;font-size:10px;opacity:.65;margin-left:18px;line-height:1.4;word-break:break-word">'+d.eq.desc+'</div></td>'
+      +' <span style="font-weight:400;font-size:11px;opacity:.8">'+d.eq.desc+'</span></td>'
       +'<td class="left" colspan="2" style="font-size:11.5px;font-weight:400;opacity:.8">'+period+'</td>'
       +'<td class="'+vc(eqTotA)+'">'+brl(eqTotA)+'</td>'
       +'<td class="'+vc(eqTotP)+'">'+brl(eqTotP)+'</td>'
@@ -704,7 +629,7 @@ function aplicar(){
         +'<td class="left" style="color:var(--muted);font-size:11.5px">'+cpStr+'</td>'
         +'<td class="'+(Math.abs(p.sa)>=0.005?vc(p.sa):'vz')+'">'+(p.ca.length?(Math.abs(p.sa)>=0.005?brl(p.sa):'<span title="Saldo líquido zero">R$ 0,00</span>'):'&#8212;')+'</td>'
         +'<td class="'+(Math.abs(p.sp)>=0.005?vc(p.sp):'vz')+'">'+(p.cp.length?(Math.abs(p.sp)>=0.005?brl(p.sp):'<span title="Saldo líquido zero">R$ 0,00</span>'):'&#8212;')+'</td>'
-        +'<td class="'+dc+'" style="font-weight:700">'+(Math.abs(dv)>=0.005?brl(dv):'<span title="Diferença zero">R$ 0,00</span>')+'</td>'
+        +'<td class="'+dc+'" style="font-weight:700">'+(Math.abs(dv)>=0.005?brl(dv):'&#8212;')+'</td>'
         +'</tr>';
     });
 
@@ -766,10 +691,9 @@ function toggleKpis(el){
 
 function toggle(id){
   const tog=document.getElementById('tog_'+id);
-  const rows=document.querySelectorAll('[data-par="'+id+'"]');
-  const aberto=rows.length>0&&rows[0].style.display!=='none';
-  if(aberto){rows.forEach(tr=>tr.style.display='none');if(tog)tog.innerHTML='&#9654;';}
-  else{rows.forEach(tr=>tr.style.display='');if(tog)tog.innerHTML='&#9660;';}
+  const aberto=tog&&tog.innerHTML.includes('9660');
+  if(aberto){fecharDesc(id);if(tog)tog.innerHTML='&#9658;';}
+  else{document.querySelectorAll('[data-par="'+id+'"]').forEach(tr=>tr.style.display='');if(tog)tog.innerHTML='&#9660;';}
 }
 function fecharDesc(id){
   document.querySelectorAll('[data-par="'+id+'"]').forEach(tr=>{tr.style.display='none';});
@@ -780,7 +704,7 @@ function expandirTudo(){
 }
 function recolherTudo(){
   document.querySelectorAll('[data-par]').forEach(tr=>tr.style.display='none');
-  document.querySelectorAll('.tog').forEach(el=>el.innerHTML='&#9654;');
+  document.querySelectorAll('.tog').forEach(el=>el.innerHTML='&#9658;');
 }
 
 function limpar(){
@@ -821,7 +745,7 @@ function init(){
   if(meses.length)fm.value=meses[meses.length-1];
   const ugSet=new Set();
   window.ALL.forEach(r=>{ugSet.add(r.ug);ugSet.add(r.cp);});
-  ugList=[...ugSet].filter(u=>u&&(/^\d{6}-\d{5}$/.test(u)||/^\d{6}$/.test(u))).sort();
+  ugList=[...ugSet].filter(u=>u&&/^\d{6}-\d{5}$/.test(u)).sort();
   aplicar();
 }
 </script>
@@ -840,7 +764,7 @@ def gerar_html(records: list, conta_names: dict) -> str:
     compressed = gzip.compress(raw.encode("utf-8"), compresslevel=9)
     b64 = base64.urlsafe_b64encode(compressed).decode()
 
-    eq_js = json.dumps([{"id": e["id"], "label": e.get("label",""), "desc": e["desc"]} for e in EQUACOES],
+    eq_js = json.dumps([{"id": e["id"], "desc": e["desc"]} for e in EQUACOES],
                        ensure_ascii=False)
     cn_js = json.dumps(conta_names, ensure_ascii=False)
 
@@ -874,7 +798,7 @@ def main():
     parser.add_argument("--no-push", action="store_true")
     args = parser.parse_args()
 
-    print("Extraindo dados do Oracle (EQ1–EQ19)…")
+    print("Extraindo dados do Oracle (EQ1–EQ14)…")
     records, conta_names = extrair()
     print(f"  Registros válidos: {len(records):,}")
 
