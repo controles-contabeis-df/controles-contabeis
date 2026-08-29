@@ -86,13 +86,13 @@ EQUACOES = [
      "ativo": [112220100, 112120202, 113821300, 113824500]},
 
     {"id": "EQ8",  "label": "Infrações Legais e Contratuais",
-     "desc": "218920400 = 113820700",
-     "passivo_exact": [218920400], "passivo_prefix": None,
+     "desc": "218920400+218925700 = 113820700",
+     "passivo_exact": [218920400, 218925700], "passivo_prefix": None,
      "ativo": [113820700]},
 
     {"id": "EQ9",  "label": "IPTU / TLP",
-     "desc": "214320200 = 112120105",
-     "passivo_exact": [214320200], "passivo_prefix": None,
+     "desc": "214320200+214325200 = 112120105",
+     "passivo_exact": [214320200, 214325200], "passivo_prefix": None,
      "ativo": [112120105]},
 
     # EQ10: ex-EQ19 (ISS a Compensar — par de ativos que se anulam intra-OFSS)
@@ -146,14 +146,34 @@ EQUACOES = [
      "passivo_exact": [214220600], "passivo_prefix": None,
      "ativo": [112120201]},
 
-    # EQ19: Setorial Financeira UG 130101 — última; divergência estrutural esperada.
+    {"id": "EQ19", "label": "Rec. a Devolver RP",
+     "desc": "218924010+218924011 = 112320600",
+     "passivo_exact": [218924010, 218924011], "passivo_prefix": None,
+     "ativo": [112320600]},
+
+    {"id": "EQ20", "label": "Valores a Devolver GDF",
+     "desc": "218924400 = 112324400",
+     "passivo_exact": [218924400], "passivo_prefix": None,
+     "ativo": [112324400]},
+
+    {"id": "EQ21", "label": "Depósitos Judiciais",
+     "desc": "218920199 = 113829700",
+     "passivo_exact": [218920199], "passivo_prefix": None,
+     "ativo": [113829700]},
+
+    {"id": "EQ22", "label": "Capital Social e Participações",
+     "desc": "231220100+232120100 = 122120101+122120106+122120201",
+     "passivo_exact": [231220100, 232120100], "passivo_prefix": None,
+     "ativo": [122120101, 122120106, 122120201]},
+
+    # EQ23: Setorial Financeira UG 130101 — última; divergência estrutural esperada.
     # 218924019 em EQ6 apenas (evita dupla contagem).
-    {"id": "EQ19", "label": "Outros",
+    {"id": "EQ23", "label": "Outros",
      "desc": "218920102+218820199+218820403+218820430+213120199+213125199"
-             "+218924004+218924016+218924018 = "
+             "+218924004+218924016+218924018+213125399+218925102+218825403 = "
              "113829900+113821200+112321700+112320700+112321300+112120199",
      "passivo_exact": [218920102, 218820199, 218820403, 218820430, 213120199, 213125199,
-                       218924004, 218924016, 218924018],
+                       218924004, 218924016, 218924018, 213125399, 218925102, 218825403],
      "passivo_prefix": None,
      "ativo": [113829900, 113821200, 112321700, 112320700, 112321300, 112120199]},
 ]
