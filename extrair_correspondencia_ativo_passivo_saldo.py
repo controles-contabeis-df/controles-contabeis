@@ -1,7 +1,7 @@
 """
-Correspondência UG Ativo × Passivo — EQ1–EQ19
+Correspondência UG Ativo × Passivo — EQ1–EQ30
 Consolida as equações do painel de saldo (EQ1–EQ6) com as equações derivadas
-dos Roteiros de Evento (EQ7–EQ15), identificadas via cruzamento EVENTO×EVENTOROTEIRO.
+dos Roteiros de Evento (EQ7–EQ30), identificadas via cruzamento EVENTO×EVENTOROTEIRO.
 
 Equações monitoradas:
   EQ1 : 21142XXXX = 113620101 + 113620103          (RPPS patronal)
@@ -9,22 +9,33 @@ Equações monitoradas:
   EQ3 : 218820104 = 112120101                       (IR retido na fonte)
   EQ4 : 218820107 = 112120104                       (ICMS retido)
   EQ5 : 214320100+214325100+218820108+218827005 = 112120107  (ISS)
-  EQ6 : 218924019 = 112322200                       (Convênios — subgrupo 92)
-  EQ7 : 213120101+213125101 = 112220100+112120201+112120202+113821300+113824500
-  EQ8 : 218920500 = 112322100                       (Convênios a pagar Intra-OFSS)
-  EQ9 : 218920400 = 113820700                       (Infrações/multas intra)
-  EQ10: 214320200 = 112120105                       (IPTU)
-  EQ11: 214220600 = 112120201                       (Taxa de licença)
-  EQ12: 214229900 = 112120103                       (Outros tributos e contribuições)
-  EQ13: 218921300 = 113129907                       (Indenizações — série específica)
-  EQ14: 218924015 = 112321000                       (Recursos a Liberar/Receber — Subvenções)
-  EQ15: 228924015 = 121129701                       (Recursos a Liberar/Receber — Subvenções Intra-OFSS)
-  EQ16: 218924003 = 112320400                       (Recursos a Liberar/Receber — RAP Processado)
-  EQ17: 218920102+218820199+218820403+218820430+213120199
-        +218924004+218924016+218924018 = 113829900+113821200
-        (Setorial Financeira 130101 — última; divergência estrutural esperada)
+  EQ6 : 218924019 = 112322200                       (DREM)
+  EQ7 : 213120101+213125101 = 112220100+112120202+113821300+113824500 (Fornecedores)
+  EQ8 : 218920400+218925700 = 113820700             (Infrações/multas intra)
+  EQ9 : 214320200+214325200 = 112120105             (IPTU/TLP)
+  EQ10: 113220700 + 112920101 = 0                   (ISS a Compensar — par que se anula)
+  EQ11: 214229900 = 112120103                       (Outros Tributos Estaduais)
+  EQ12: 218920500+218921300+218926300 = 112322100+113129907 (Convênios)
+  EQ13: 218924015 = 112321000                       (Subvenções)
+  EQ14: 228924015 = 121129701                       (Subvenções IPREV)
+  EQ15: 218924003 = 112320400                       (RPP a Liberar)
+  EQ16: 218924001 = 112320500                       (RPNP a Liberar)
+  EQ17: 228921600 = 121229847                       (Fundo Previdenciário)
+  EQ18: 214220600 = 112120201                       (Taxa Licenc. Veículos)
+  EQ19: 218924010+218924011 = 112320600             (Rec. a Devolver RP)
+  EQ20: 218924400 = 112324400                       (Valores a Devolver GDF)
+  EQ21: 218920199 = 113829700                       (Depósitos Judiciais)
+  EQ22: 231220100+232120100 = 122120101+122120106+122120201 (Capital Social)
+  EQ23: 218929600 = 112329996                       (Obrigações em Liquidação)
+  EQ24: 218924018 = 112321700                       (Superávit Balanço a Devolver)
+  EQ25: 218924004 = 112320700                       (Repasse a Maior)
+  EQ26: 218924016 = 112321300                       (Contrapartida Não Executada)
+  EQ27: 227220501 + 227220101 = 0                   (Insuf. Fin. Repartição I — par que se anula)
+  EQ28: 227220502 + 227220203 = 0                   (Insuf. Fin. Repartição II — par que se anula)
+  EQ29: 218929800 = 119520100                       (Tributos Pagos)
+  EQ30: 218920102+218820199+...+218825403 = 113829900+... (Outros — última)
 
-Nota: 218924019 consta somente em EQ6 — não incluída em EQ17 para evitar dupla contagem.
+Nota: 218924019 consta somente em EQ6 — não incluída em EQ30 para evitar dupla contagem.
 
 Uso:
     python extrair_correspondencia_ativo_passivo_saldo.py [--no-push]
@@ -162,27 +173,74 @@ EQUACOES = [
      "ativo": [113829700]},
 
     {"id": "EQ22", "label": "Capital Social e Participações",
-     "desc": "231220100+232120100 = 122120101+122120106+122120201",
-     "passivo_exact": [231220100, 232120100], "passivo_prefix": None,
-     "ativo": [122120101, 122120106, 122120201]},
+     "desc": "23122XXXX+23212XXXX = 12212XXXX",
+     "passivo_exact": [], "passivo_prefix": None,
+     "passivo_prefixes": ["23122", "23212"],
+     "ativo": [],
+     "ativo_prefixes": ["12212"]},
 
-    # EQ23: Setorial Financeira UG 130101 — última; divergência estrutural esperada.
+    {"id": "EQ23", "label": "Obrigações em Liquidação",
+     "desc": "218929600 = 112329996",
+     "passivo_exact": [218929600], "passivo_prefix": None,
+     "ativo": [112329996]},
+
+    {"id": "EQ24", "label": "Superávit de Balanço a Devolver",
+     "desc": "218924018 = 112321700",
+     "passivo_exact": [218924018], "passivo_prefix": None,
+     "ativo": [112321700]},
+
+    {"id": "EQ25", "label": "Repasse a Maior",
+     "desc": "218924004 = 112320700",
+     "passivo_exact": [218924004], "passivo_prefix": None,
+     "ativo": [112320700]},
+
+    {"id": "EQ26", "label": "Contrapartida Não Executada",
+     "desc": "218924016 = 112321300",
+     "passivo_exact": [218924016], "passivo_prefix": None,
+     "ativo": [112321300]},
+
+    # EQ27/EQ28: Insuficiência Financeira — Fundo em Repartição (par retificadora/obrigação)
+    # Análogo a EQ10: dois passivos da mesma classe se anulam; soma esperada = 0.
+    {"id": "EQ27", "label": "Insufic. Fin. Repartição I",
+     "desc": "227220501 + 227220101 = 0",
+     "passivo_exact": [], "passivo_prefix": None,
+     "ativo": [227220501, 227220101]},
+
+    {"id": "EQ28", "label": "Insufic. Fin. Repartição II",
+     "desc": "227220502 + 227220203 = 0",
+     "passivo_exact": [], "passivo_prefix": None,
+     "ativo": [227220502, 227220203]},
+
+    # EQ29: Tributos Pagos intra-OFSS
+    {"id": "EQ29", "label": "Tributos Pagos",
+     "desc": "218929800 = 119520100",
+     "passivo_exact": [218929800], "passivo_prefix": None,
+     "ativo": [119520100]},
+
+    # EQ30: Setorial Financeira UG 130101 — última; divergência estrutural esperada.
     # 218924019 em EQ6 apenas (evita dupla contagem).
-    {"id": "EQ23", "label": "Outros",
+    {"id": "EQ30", "label": "Outros",
      "desc": "218920102+218820199+218820403+218820430+213120199+213125199"
-             "+218924004+218924016+218924018+213125399+218925102+218825403 = "
-             "113829900+113821200+112321700+112320700+112321300+112120199",
+             "+213125399+218925102+218825403+235420100+214225101 = "
+             "113829900+113821200+112120199+113220500+123121952+113820200",
      "passivo_exact": [218920102, 218820199, 218820403, 218820430, 213120199, 213125199,
-                       218924004, 218924016, 218924018, 213125399, 218925102, 218825403],
+                       213125399, 218925102, 218825403, 235420100, 214225101],
      "passivo_prefix": None,
-     "ativo": [113829900, 113821200, 112321700, 112320700, 112321300, 112120199]},
+     "ativo": [113829900, 113821200, 112120199, 113220500, 123121952, 113820200]},
 ]
+
 
 _CONTAS_ATIVO  = sorted({c for eq in EQUACOES for c in eq["ativo"]})
 _CONTAS_EXATAS = sorted({c for eq in EQUACOES for c in eq["passivo_exact"]})
-_PREFIXOS      = [eq["passivo_prefix"] for eq in EQUACOES if eq["passivo_prefix"]]
-# passivo_flip: contas classe 1 que entram como "P" com sinal negado (contra-ativos)
 _CONTAS_FLIP_EXTRA = sorted({c for eq in EQUACOES for c in eq.get("passivo_flip", [])})
+
+# Todos os prefixos: passivo (singular e lista) + ativo (lista)
+_PREFIXOS_P: list[str] = (
+    [eq["passivo_prefix"] for eq in EQUACOES if eq.get("passivo_prefix")]
+    + [p for eq in EQUACOES for p in eq.get("passivo_prefixes", [])]
+)
+_PREFIXOS_A: list[str] = [p for eq in EQUACOES for p in eq.get("ativo_prefixes", [])]
+_PREFIXOS = _PREFIXOS_P + _PREFIXOS_A  # para retrocompatibilidade com SQL_CONTA
 
 _CONTA_META: dict[str, list[tuple[str, str]]] = {}
 for eq in EQUACOES:
@@ -193,49 +251,42 @@ for eq in EQUACOES:
     for c in eq.get("passivo_flip", []):
         _CONTA_META.setdefault(str(c), []).append((eq["id"], "P"))
 
-# Contas flip por equação (para negação de sinal)
 _FLIP_SET: set[str] = {str(c) for eq in EQUACOES for c in eq.get("passivo_flip", [])}
+
+
+def _pfx_between(pfx: str, alias: str = "v") -> str:
+    lo = int(pfx) * 10 ** (9 - len(pfx))
+    hi = (int(pfx) + 1) * 10 ** (9 - len(pfx)) - 1
+    col = f"{alias}.COCONTACONTABIL" if alias else "COCONTACONTABIL"
+    return f"{col} BETWEEN {lo} AND {hi}"
 
 
 def _where_contas() -> str:
     parts = []
     todas = sorted(set(_CONTAS_ATIVO + _CONTAS_EXATAS + _CONTAS_FLIP_EXTRA))
     if todas:
-        lst = ",".join(str(c) for c in todas)
-        parts.append(f"v.COCONTACONTABIL IN ({lst})")
-    for pfx in _PREFIXOS:
-        lo = int(pfx) * 10**(9 - len(pfx))
-        hi = (int(pfx) + 1) * 10**(9 - len(pfx)) - 1
-        parts.append(f"v.COCONTACONTABIL BETWEEN {lo} AND {hi}")
+        parts.append(f"v.COCONTACONTABIL IN ({','.join(str(c) for c in todas)})")
+    for pfx in _PREFIXOS_P + _PREFIXOS_A:
+        parts.append(_pfx_between(pfx, "v"))
     return " OR ".join(parts)
 
 def _sql_conta() -> str:
     parts = []
     todas = sorted(set(_CONTAS_ATIVO + _CONTAS_EXATAS + _CONTAS_FLIP_EXTRA))
     if todas:
-        lst = ",".join(str(c) for c in todas)
-        parts.append(f"COCONTACONTABIL IN ({lst})")
-    for pfx in _PREFIXOS:
-        lo = int(pfx) * 10**(9 - len(pfx))
-        hi = (int(pfx) + 1) * 10**(9 - len(pfx)) - 1
-        parts.append(f"COCONTACONTABIL BETWEEN {lo} AND {hi}")
+        parts.append(f"COCONTACONTABIL IN ({','.join(str(c) for c in todas)})")
+    for pfx in _PREFIXOS_P + _PREFIXOS_A:
+        parts.append(_pfx_between(pfx, ""))
     return " OR ".join(parts)
 
 
 SQL = f"""
 SELECT
   v.INMES,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(TO_CHAR(v.COUG), 6, '0')
-    ELSE LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0')
-  END                                           AS UG_PROPRIO,
+  LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0')
+                                                AS UG_PROPRIO,
   TO_CHAR(v.COCONTACONTABIL)                    AS COCONTACONTABIL,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), 1, 6), 6, '0')
-    ELSE SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
-  END                                           AS UG_CONTRAPARTE,
+  SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12) AS UG_CONTRAPARTE,
   ROUND(SUM(
     CASE SUBSTR(TO_CHAR(v.COCONTACONTABIL), 1, 1)
       WHEN '1' THEN v.VADEBITO  - v.VACREDITO
@@ -248,17 +299,9 @@ WHERE ({_where_contas()})
   AND LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) >= 12
 GROUP BY
   v.INMES,
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(TO_CHAR(v.COUG), 6, '0')
-    ELSE LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0')
-  END,
+  LPAD(TO_CHAR(v.COUG), 6, '0') || '-' || LPAD(TO_CHAR(v.COGESTAO), 5, '0'),
   TO_CHAR(v.COCONTACONTABIL),
-  CASE
-    WHEN LENGTH(TRIM(TO_CHAR(v.COCONTACORRENTE))) = 16
-    THEN LPAD(SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), 1, 6), 6, '0')
-    ELSE SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
-  END
+  SUBSTR(TRIM(TO_CHAR(v.COCONTACORRENTE)), -12)
 HAVING ROUND(SUM(
     CASE SUBSTR(TO_CHAR(v.COCONTACONTABIL), 1, 1)
       WHEN '1' THEN v.VADEBITO  - v.VACREDITO
@@ -273,8 +316,11 @@ SQL_CONTA = f"""SELECT TO_CHAR(COCONTACONTABIL) AS COCONTACONTABIL,
                        TRIM(NOCONTACONTABIL)     AS NOCONTACONTABIL
 FROM {SCHEMA}VCONTACONTABIL WHERE {_sql_conta()}"""
 
-# Aceita UG completa (XXXXXX-XXXXX) ou apenas COUG (XXXXXX) — para CC de 16 chars (INCONTACORRENTE=24)
-_UG_RE = re.compile(r"^\d{6}(-\d{5})?$")
+# UG_PROPRIO e UG_CONTRAPARTE sempre no formato COUG-COGESTAO (XXXXXX-XXXXX).
+# CC de 12 chars (INCC=10): todo o CC já é COUG_CONTRA-COGESTAO_CONTRA.
+# CC de 32 chars (INCC=76) ou 21 chars (INCC=69): últimos 12 chars = COUG_CONTRA-COGESTAO_CONTRA.
+# CC de 16 chars não existe nos dados — cláusula removida.
+_UG_RE = re.compile(r"^\d{6}-\d{5}$")
 
 
 def extrair():
@@ -296,8 +342,14 @@ def extrair():
         if conta in _CONTA_META:
             return _CONTA_META[conta]
         for eq in EQUACOES:
-            if eq["passivo_prefix"] and conta.startswith(eq["passivo_prefix"]):
+            if eq.get("passivo_prefix") and conta.startswith(eq["passivo_prefix"]):
                 return [(eq["id"], "P")]
+            for pfx in eq.get("passivo_prefixes", []):
+                if conta.startswith(pfx):
+                    return [(eq["id"], "P")]
+            for pfx in eq.get("ativo_prefixes", []):
+                if conta.startswith(pfx):
+                    return [(eq["id"], "A")]
         return []
 
     # Explode: uma conta pode pertencer a múltiplas equações (ex: 113829900)
@@ -520,12 +572,11 @@ const EQUACOES     = __EQUACOES__;
 const CONTA_NAMES  = __CONTA_NAMES__;
 const MESES_PT = {0:'Saldo Inicial',1:'Janeiro',2:'Fevereiro',3:'Mar\u00e7o',4:'Abril',5:'Maio',6:'Junho',
                   7:'Julho',8:'Agosto',9:'Setembro',10:'Outubro',11:'Novembro',12:'Dezembro'};
-const EQ_COLORS = [
-  '#B8A8D8','#A8B4E8','#A0CCF0','#8ED8F0','#8EE4D8',
-  '#A0E4A4','#C0ECA0','#F8F0A8','#F8DC90','#FFB89C',
-  '#FFA894','#FFB0C8','#EEB4E0','#DDB8D8','#C8B8E8',
-  '#B4C8F4','#9ED8F0','#AAEAC8'
-];
+// Arco-íris contínuo: violeta (270°) → azul → ciano → verde → amarelo → laranja → vermelho → rosa
+// Gerado dinamicamente para cobrir todas as equações sem repetição.
+const EQ_COLORS = Array.from({length: EQUACOES.length}, (_,i) =>
+  `hsl(${(270 - Math.round(i * 270 / Math.max(EQUACOES.length - 1, 1)) + 360) % 360},62%,74%)`
+);
 
 function decomp(b64){
   const s=b64.replace(/-/g,'+').replace(/_/g,'/');
@@ -894,7 +945,7 @@ def main():
     parser.add_argument("--no-push", action="store_true")
     args = parser.parse_args()
 
-    print("Extraindo dados do Oracle (EQ1–EQ19)…")
+    print("Extraindo dados do Oracle (EQ1–EQ30)…")
     records, conta_names = extrair()
     print(f"  Registros válidos: {len(records):,}")
 
