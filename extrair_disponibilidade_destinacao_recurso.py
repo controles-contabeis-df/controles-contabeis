@@ -42,7 +42,7 @@ ARQUIVO_HTML  = "disponibilidade_destinacao_recurso.html"
 #   622920101 + 631100000 + 631810000 = 821120100   (fonte via NE/NERP)
 #   622920102 + 631200000 + 631820000 = 821120200   (fonte via NE/NERP)
 #   622920103 + 631300000 + 6321101XX = 821130200 + 821130100  (fonte via NE/NERP)
-#   622920104 + 631400000 + 63221XXXX = 821140000   (fonte via NE/NERP)
+#   622920104 + 631400000 + 63221XXXX + 827110402 = 821140000   (fonte via NE/NERP)
 #   827110401 = 821130300   (fonte direto no COCONTACORRENTE)
 #   721190300 = 821110100 + 821110200 + 821120100  (fonte direto no COCONTACORRENTE)
 # Contas 63XXXXXXX = Restos a Pagar; fonte via NERESTOPAGAR (NEs de anos anteriores)
@@ -116,12 +116,14 @@ orc_rp AS (
         ne.COFONTE
 ),
 orc2 AS (
-    -- 827110401 (par, 1o digito 8) = credora -> VACREDITO - VADEBITO
-    -- 721190300 (impar, 1o digito 7) = devedora -> VADEBITO - VACREDITO
+    -- 827110401/827110402 (digito 8) = credora -> VACREDITO - VADEBITO; 827110402 agrupada em 622920104
+    -- 721190300 (digito 7) = devedora -> VADEBITO - VACREDITO
     SELECT
         sc.COGESTAO,
         sc.COUG,
-        sc.COCONTACONTABIL,
+        CASE WHEN sc.COCONTACONTABIL = 827110402 THEN 622920104
+             ELSE sc.COCONTACONTABIL
+        END AS COCONTACONTABIL,
         TO_NUMBER(SUBSTR(sc.COCONTACORRENTE, 1, 9)) AS COFONTE,
         SUM(
             CASE WHEN sc.COCONTACONTABIL = 721190300
@@ -132,7 +134,7 @@ orc2 AS (
     FROM
         {schema}VSALDOCONTABIL sc
     WHERE
-        sc.COCONTACONTABIL IN (827110401, 721190300)
+        sc.COCONTACONTABIL IN (827110401, 827110402, 721190300)
         {filtro_ug_2}
         {filtro_mes}
     GROUP BY
@@ -387,7 +389,7 @@ tfoot tr td:first-child{text-align:left}
       <option value="622920101">Empenhos a Liquidar</option>
       <option value="622920102">Empenhos em Liquidação</option>
       <option value="622920103">Empenhos Liq. a Pagar</option>
-      <option value="622920104">Empenhos Pagos</option>
+      <option value="622920104">DDR Utilizada</option>
       <option value="827110401">Obrigações Extraorçamentárias</option>
       <option value="721190300">Disponibilidade Real</option>
     </select>
@@ -659,8 +661,8 @@ function recolherTudo(){
 }
 
 /* ── KPIs ── */
-const NOME_CONTA={'622920101':'Empenhos a Liquidar','622920102':'Empenhos em Liquidação','622920103':'Empenhos Liq. a Pagar','622920104':'Empenhos Pagos','827110401':'Obrigações Extraorçamentárias','721190300':'Disponibilidade Real'};
-const ACCT_LABEL={'622920101':'622920101 + 631100000 + 631810000 (a) · 821120100 (b)','622920102':'622920102 + 631200000 + 631820000 (a) · 821120200 (b)','622920103':'622920103 + 631300000 + 632110100 + 632110200 + 632110300 + 632110400 (a) · 821130200 + 821130100 (b)','622920104':'622920104 + 631400000 + 63221XXXX (a) · 821140000 (b)','827110401':'827110401 (a) · 821130300 (b)','721190300':'721190300 (a) · 821110100 + 821110200 + 821120100 (b)'};
+const NOME_CONTA={'622920101':'Empenhos a Liquidar','622920102':'Empenhos em Liquidação','622920103':'Empenhos Liq. a Pagar','622920104':'DDR Utilizada','827110401':'Obrigações Extraorçamentárias','721190300':'Disponibilidade Real'};
+const ACCT_LABEL={'622920101':'622920101 + 631100000 + 631810000 (a) · 821120100 (b)','622920102':'622920102 + 631200000 + 631820000 (a) · 821120200 (b)','622920103':'622920103 + 631300000 + 632110100 + 632110200 + 632110300 + 632110400 (a) · 821130200 + 821130100 (b)','622920104':'622920104 + 631400000 + 63221XXXX + 827110402 (a) · 821140000 (b)','827110401':'827110401 (a) · 821130300 (b)','721190300':'721190300 (a) · 821110100 + 821110200 + 821120100 (b)'};
 const GRUPOS_ORDER=['622920101','622920102','622920103','622920104','827110401','721190300'];
 function toggleKpis(el){
   const body=document.getElementById('krow');
