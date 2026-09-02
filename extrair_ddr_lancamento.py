@@ -44,7 +44,7 @@ ARQUIVO_HTML  = "ddr_lancamento.html"
 #   622920101 = 821120100
 #   622920102 = 821120200
 #   622920103 = 821130200 + 821130100
-#   622920104 = 821140000
+#   622920104 + 827110402 = 821140000
 #   827110401 = 821130300
 #   721190300 = 821110100 + 821110200 + 821120100
 #
@@ -80,7 +80,7 @@ WITH lb AS (
     FROM {schema}VLANCAMENTOCONTABIL l
     WHERE (l.COCONTACONTABIL IN (
         622920101, 622920102, 622920103, 622920104,
-        721190300, 827110401,
+        721190300, 827110401, 827110402,
         821120100, 821120200, 821130200, 821130100, 821140000,
         821130300, 821110100, 821110200,
         -- Restos a Pagar (63XXXXXXX)
@@ -100,7 +100,7 @@ por_conta AS (
         MIN(DALANCAMENTO) AS DALANCAMENTO,
         ROUND(SUM(
             CASE
-                WHEN COCONTACONTABIL IN (622920101,622920102,622920103,622920104,827110401,
+                WHEN COCONTACONTABIL IN (622920101,622920102,622920103,622920104,827110401,827110402,
                     631100000,631810000,631200000,631820000,
                     631300000,632110100,632110200,632110300,632110400,
                     631400000,632210000,632211000,632212000,632213000,632214000,
@@ -126,6 +126,7 @@ orc AS (
             WHEN 622920103 THEN '821130200 + 821130100'
             WHEN 622920104 THEN '821140000'
             WHEN 827110401 THEN '821130300'
+            WHEN 827110402 THEN '821140000'
             WHEN 721190300 THEN '821110100 + 821110200 + 821120100'
             -- Restos a Pagar (63XXXXXXX)
             WHEN 631100000 THEN '821120100'
@@ -140,6 +141,17 @@ orc AS (
             WHEN 631400000 THEN '821140000'
             ELSE CASE WHEN pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999 THEN '821140000' END
         END AS CONTA_B_REF,
+        -- EQ_GROUP: identifica a equação; chave real do JOIN com ctl
+        CASE
+            WHEN pc.COCONTACONTABIL IN (622920101,631100000,631810000)               THEN 1
+            WHEN pc.COCONTACONTABIL IN (622920102,631200000,631820000)               THEN 2
+            WHEN pc.COCONTACONTABIL IN (622920103,631300000,
+                                        632110100,632110200,632110300,632110400)     THEN 3
+            WHEN pc.COCONTACONTABIL IN (622920104,631400000,827110402)
+              OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)                THEN 4
+            WHEN pc.COCONTACONTABIL = 827110401                                      THEN 5
+            WHEN pc.COCONTACONTABIL = 721190300                                      THEN 6
+        END AS EQ_GROUP,
         CASE
             WHEN pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104)
                 THEN ne.COFONTE
@@ -163,7 +175,7 @@ orc AS (
         AND nerp.NUNE      = SUBSTR(pc.COCONTACORRENTE, 1, 11)
         AND nerp.COGESTAO  = pc.COGESTAO_EMIT
         AND nerp.COUG      = pc.COUG_EMIT
-    WHERE pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104,721190300,827110401,
+    WHERE pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104,721190300,827110401,827110402,
         631100000,631810000,631200000,631820000,
         631300000,632110100,632110200,632110300,632110400,631400000)
        OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)
@@ -184,6 +196,16 @@ ctl AS (
             WHEN 821110100 THEN 721190300
             WHEN 821110200 THEN 721190300
         END AS CONTA_KEY,
+        CASE COCONTACONTABIL
+            WHEN 821120100 THEN 1
+            WHEN 821120200 THEN 2
+            WHEN 821130200 THEN 3
+            WHEN 821130100 THEN 3
+            WHEN 821140000 THEN 4
+            WHEN 821130300 THEN 5
+            WHEN 821110100 THEN 6
+            WHEN 821110200 THEN 6
+        END AS EQ_GROUP,
         TO_NUMBER(SUBSTR(COCONTACORRENTE, 1, 9)) AS FONTE_B,
         VLNET AS MOV_B
     FROM por_conta
@@ -196,6 +218,7 @@ ctl AS (
         INMES, NUDOCUMENTO, COEVENTO, DALANCAMENTO,
         821120100 AS CONTA_B_REAL,
         721190300 AS CONTA_KEY,
+        6         AS EQ_GROUP,
         TO_NUMBER(SUBSTR(COCONTACORRENTE, 1, 9)) AS FONTE_B,
         VLNET AS MOV_B
     FROM por_conta
@@ -206,12 +229,12 @@ ctl_agg AS (
     SELECT
         COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
         INMES, NUDOCUMENTO, COEVENTO,
-        CONTA_KEY, CONTA_B_REAL, FONTE_B,
+        EQ_GROUP, CONTA_KEY, CONTA_B_REAL, FONTE_B,
         SUM(MOV_B)        AS MOV_B,
         MIN(DALANCAMENTO) AS DALANCAMENTO
     FROM ctl
     GROUP BY COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
-             INMES, NUDOCUMENTO, COEVENTO, CONTA_KEY, CONTA_B_REAL, FONTE_B
+             INMES, NUDOCUMENTO, COEVENTO, EQ_GROUP, CONTA_KEY, CONTA_B_REAL, FONTE_B
 )
 SELECT
     COALESCE(o.COGESTAO,      c.COGESTAO)                             AS COGESTAO,
@@ -222,12 +245,12 @@ SELECT
     COALESCE(o.COGESTAO_EMIT, c.COGESTAO_EMIT)                        AS COGESTAO_EMIT,
     COALESCE(o.COUG_EMIT,     c.COUG_EMIT)                            AS COUG_EMIT,
     COALESCE(o.NUDOCUMENTO,   c.NUDOCUMENTO)                          AS NUDOCUMENTO,
-    COALESCE(o.CONTA_A,       c.CONTA_KEY)                            AS CONTA_A,
+    o.CONTA_A                                                         AS CONTA_A,
     o.FONTE_A                                                         AS FONTE_A,
-    NVL(o.MOV_A, 0)                                                   AS MOV_A,
+    o.MOV_A                                                           AS MOV_A,
     c.CONTA_B_REAL                                                    AS CONTA_B,
     c.FONTE_B                                                         AS FONTE_B,
-    NVL(c.MOV_B, 0)                                                   AS MOV_B,
+    c.MOV_B                                                           AS MOV_B,
     NVL(o.MOV_A, 0) - NVL(c.MOV_B, 0)                                AS DIFERENCA
 FROM orc o
 FULL OUTER JOIN ctl_agg c
@@ -238,7 +261,7 @@ FULL OUTER JOIN ctl_agg c
     AND o.INMES         = c.INMES
     AND o.NUDOCUMENTO   = c.NUDOCUMENTO
     AND o.COEVENTO      = c.COEVENTO
-    AND o.CONTA_A       = c.CONTA_KEY
+    AND o.EQ_GROUP      = c.EQ_GROUP
     AND (o.FONTE_A      = c.FONTE_B OR (o.FONTE_A IS NULL AND c.FONTE_B IS NULL))
 ORDER BY
     COALESCE(o.DALANCAMENTO, c.DALANCAMENTO),
@@ -473,7 +496,7 @@ tfoot td.left{text-align:left}
         <th onclick="sortBy('FONTE_B')" style="width:82px">Fonte (b) <span id="s_FONTE_B" class="si">⇅</span></th>
         <th onclick="sortBy('MOV_B')" style="width:115px">Mov. Conta (b) <span id="s_MOV_B" class="si">⇅</span></th>
         <th onclick="sortBy('DIFERENCA')" style="width:115px">Diferença (a−b) <span id="s_DIFERENCA" class="si">⇅</span></th>
-        <th onclick="sortBy('DALANCAMENTO')" style="width:88px">Data Lanç. <span id="s_DALANCAMENTO" class="si">↑</span></th>
+        <th onclick="sortBy('DALANCAMENTO')" style="width:88px">Data Lanç. <span id="s_DALANCAMENTO" class="si">↓</span></th>
         <th class="left nosort" style="width:110px">Gestão-UG Emitente</th>
         <th class="left" onclick="sortBy('NUDOCUMENTO')" style="width:130px">Nº Documento <span id="s_NUDOCUMENTO" class="si">⇅</span></th>
         <th class="left" onclick="sortBy('COEVENTO')" style="width:75px">Evento <span id="s_COEVENTO" class="si">⇅</span></th>
@@ -490,7 +513,7 @@ const DADOS_GZ="{dados}";
 const UGS={ugs};
 const MESES=['Saldo Inicial','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro','Encerramento do Exercício','Encerramento do Exercício'];
 const PS=100;
-let ALL=[],fil=[],filDocs=[],ugSel='',emitSel='',pg=1,sortCol='DALANCAMENTO',sortDir=1;
+let ALL=[],fil=[],filDocs=[],ugSel='',emitSel='',pg=1,sortCol='DALANCAMENTO',sortDir=-1;
 let _dbt; function debounce(fn,ms=300){clearTimeout(_dbt);_dbt=setTimeout(fn,ms);}
 const brl=v=>(v===null||v===undefined||isNaN(v))?'—':Number(v).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const vc=v=>(v===null||v===undefined||isNaN(v))||Math.abs(v)<0.005?'vz':v>0?'vp':'vn';
@@ -648,11 +671,11 @@ function render(){
       html+='<tr class="dr-sub'+(j%2?' alt':'')+'" data-doc="'+did+'" style="display:none">'
         +'<td class="left" title="'+ugLabel+'">'+ugLabel+'</td>'
         +'<td class="mono left">'+contaA+'</td>'
-        +'<td class="mono" style="text-align:right">'+fmt9(r.FONTE_A)+'</td>'
-        +'<td class="'+vc(r.MOV_A)+'">'+brl(r.MOV_A)+'</td>'
+        +'<td class="mono" style="text-align:right">'+(r.FONTE_A!==null&&r.FONTE_A!==undefined?fmt9(r.FONTE_A):'—')+'</td>'
+        +'<td class="'+(r.MOV_A!==null&&r.MOV_A!==undefined?vc(r.MOV_A):'')+'">'+  (r.MOV_A!==null&&r.MOV_A!==undefined?brl(r.MOV_A):'—')+'</td>'
         +'<td class="mono left">'+contaB+'</td>'
-        +'<td class="mono" style="text-align:right">'+fmt9(r.FONTE_B)+'</td>'
-        +'<td class="'+vc(r.MOV_B)+'">'+brl(r.MOV_B)+'</td>'
+        +'<td class="mono" style="text-align:right">'+(r.FONTE_B!==null&&r.FONTE_B!==undefined?fmt9(r.FONTE_B):'—')+'</td>'
+        +'<td class="'+(r.MOV_B!==null&&r.MOV_B!==undefined?vc(r.MOV_B):'')+'">'+  (r.MOV_B!==null&&r.MOV_B!==undefined?brl(r.MOV_B):'—')+'</td>'
         +'<td class="'+vc(r.DIFERENCA)+'">'+brl(r.DIFERENCA)+'</td>'
         +'<td style="text-align:right;font-family:\'Consolas\',monospace;font-size:11.5px;color:var(--muted)">'+(r.DALANCAMENTO||'')+'</td>'
         +'<td class="mono left">'+emitLabel+'</td>'
@@ -825,8 +848,27 @@ def extrair(ug: str | None) -> pd.DataFrame:
         print(f"[{datetime.now():%H:%M:%S}] Executando consulta…")
         df = pd.read_sql(sql, conn, params=params if params else None)
 
-    for col in ["MOV_A", "MOV_B", "DIFERENCA"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    df["DIFERENCA"] = pd.to_numeric(df["DIFERENCA"], errors="coerce").fillna(0)
+    df["MOV_A"]     = pd.to_numeric(df["MOV_A"],     errors="coerce")  # NaN → null JS (linha órfã)
+    df["MOV_B"]     = pd.to_numeric(df["MOV_B"],     errors="coerce")  # NaN → null JS (linha órfã)
+
+    # Fan-out: uma linha (b) agregada pode corresponder a N linhas (a) distintas.
+    # Para cada grupo (emitente + doc + evento + CONTA_B + FONTE_B):
+    #   • linha 0: DIFERENCA corrigida = soma(MOV_A do grupo) − MOV_B
+    #   • linhas 1+: CONTA_B / FONTE_B / MOV_B / DIFERENCA anulados (JS exibe '—')
+    _grp = ["COGESTAO_EMIT", "COUG_EMIT", "NUDOCUMENTO", "COEVENTO", "CONTA_B", "FONTE_B"]
+    _has_b = df["CONTA_B"].notna()
+    if _has_b.any():
+        df.loc[_has_b, "_rn_b"]   = df.loc[_has_b].groupby(_grp).cumcount()
+        df.loc[_has_b, "_sum_a"]  = (
+            df.loc[_has_b].groupby(_grp)["MOV_A"].transform("sum")
+        )
+        df["_rn_b"]  = df["_rn_b"].fillna(0).astype(int)
+        _row0  = _has_b & (df["_rn_b"] == 0)
+        _fanout = _has_b & (df["_rn_b"] >= 1)
+        df.loc[_row0,   "DIFERENCA"] = df.loc[_row0, "_sum_a"] - df.loc[_row0, "MOV_B"]
+        df.loc[_fanout, ["CONTA_B", "FONTE_B", "MOV_B", "DIFERENCA"]] = None
+        df.drop(columns=["_rn_b", "_sum_a"], inplace=True)
 
     print(f"[{datetime.now():%H:%M:%S}] {len(df):,} lançamentos retornados.")
     return df
