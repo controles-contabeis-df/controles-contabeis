@@ -211,18 +211,6 @@ ctl AS (
     FROM por_conta
     WHERE COCONTACONTABIL IN (821120100,821120200,821130200,821130100,
                                821140000,821130300,821110100,821110200)
-    UNION ALL
-    -- 821120100 tambem integra o par de 721190300 (MCASP 11a ed.)
-    SELECT
-        COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
-        INMES, NUDOCUMENTO, COEVENTO, DALANCAMENTO,
-        821120100 AS CONTA_B_REAL,
-        721190300 AS CONTA_KEY,
-        6         AS EQ_GROUP,
-        TO_NUMBER(SUBSTR(COCONTACORRENTE, 1, 9)) AS FONTE_B,
-        VLNET AS MOV_B
-    FROM por_conta
-    WHERE COCONTACONTABIL = 821120100
 ),
 ctl_agg AS (
     -- Agrega por (emitente, documento, evento, conta_key, conta_b_real, fonte_b)
@@ -251,7 +239,8 @@ SELECT
     c.CONTA_B_REAL                                                    AS CONTA_B,
     c.FONTE_B                                                         AS FONTE_B,
     c.MOV_B                                                           AS MOV_B,
-    NVL(o.MOV_A, 0) - NVL(c.MOV_B, 0)                                AS DIFERENCA
+    NVL(o.MOV_A, 0) - NVL(c.MOV_B, 0)                                AS DIFERENCA,
+    COALESCE(o.EQ_GROUP, c.EQ_GROUP)                                  AS EQ_GROUP
 FROM orc o
 FULL OUTER JOIN ctl_agg c
     ON  o.COGESTAO_EMIT = c.COGESTAO_EMIT
@@ -848,27 +837,61 @@ def extrair(ug: str | None) -> pd.DataFrame:
         print(f"[{datetime.now():%H:%M:%S}] Executando consulta…")
         df = pd.read_sql(sql, conn, params=params if params else None)
 
-    df["DIFERENCA"] = pd.to_numeric(df["DIFERENCA"], errors="coerce").fillna(0)
-    df["MOV_A"]     = pd.to_numeric(df["MOV_A"],     errors="coerce")  # NaN → null JS (linha órfã)
-    df["MOV_B"]     = pd.to_numeric(df["MOV_B"],     errors="coerce")  # NaN → null JS (linha órfã)
+    for col in ["MOV_A", "MOV_B", "DIFERENCA"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # Fan-out: uma linha (b) agregada pode corresponder a N linhas (a) distintas.
-    # Para cada grupo (emitente + doc + evento + CONTA_B + FONTE_B):
-    #   • linha 0: DIFERENCA corrigida = soma(MOV_A do grupo) − MOV_B
-    #   • linhas 1+: CONTA_B / FONTE_B / MOV_B / DIFERENCA anulados (JS exibe '—')
-    _grp = ["COGESTAO_EMIT", "COUG_EMIT", "NUDOCUMENTO", "COEVENTO", "CONTA_B", "FONTE_B"]
-    _has_b = df["CONTA_B"].notna()
+    # ── Passo 1 (fan-out do lado A): N linhas de orc : 1 linha de ctl_agg ──────
+    # Ocorre quando N NEs da mesma fonte são lançados no mesmo evento (orc produz
+    # N linhas distintas que casam com 1 linha de ctl_agg).
+    # COGESTAO/COUG no agrupamento evita misturar lançamentos de UGs distintas
+    # dentro do mesmo documento; sem eles, _sum_a se anularia indevidamente.
+    # Para cada grupo (emitente+UG_contab+doc+evento+EQ_GROUP+CONTA_B+FONTE_B):
+    #   • linha 0: DIFERENCA = soma(MOV_A) − MOV_B
+    #   • linhas 1+: DIFERENCA = 0 e campos b anulados (JS exibe '—')
+    _grp_b = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
+              "EQ_GROUP", "CONTA_B", "FONTE_B"]
+    _has_b = df["CONTA_B"].notna() & df["FONTE_B"].notna()
     if _has_b.any():
-        df.loc[_has_b, "_rn_b"]   = df.loc[_has_b].groupby(_grp).cumcount()
-        df.loc[_has_b, "_sum_a"]  = (
-            df.loc[_has_b].groupby(_grp)["MOV_A"].transform("sum")
+        df.loc[_has_b, "_rn_b"]  = df.loc[_has_b].groupby(_grp_b).cumcount()
+        df.loc[_has_b, "_sum_a"] = (
+            df.loc[_has_b].groupby(_grp_b)["MOV_A"].transform("sum")
         )
-        df["_rn_b"]  = df["_rn_b"].fillna(0).astype(int)
-        _row0  = _has_b & (df["_rn_b"] == 0)
+        df["_rn_b"] = df["_rn_b"].fillna(0).astype(int)
+        _row0   = _has_b & (df["_rn_b"] == 0) & df["_sum_a"].notna()
         _fanout = _has_b & (df["_rn_b"] >= 1)
         df.loc[_row0,   "DIFERENCA"] = df.loc[_row0, "_sum_a"] - df.loc[_row0, "MOV_B"]
-        df.loc[_fanout, ["CONTA_B", "FONTE_B", "MOV_B", "DIFERENCA"]] = None
+        df.loc[_fanout, "DIFERENCA"] = 0
+        df.loc[_fanout, ["CONTA_B", "FONTE_B", "MOV_B"]] = None
         df.drop(columns=["_rn_b", "_sum_a"], inplace=True)
+
+    # ── Passo 2 (fan-out do lado B): 1 linha de orc : N linhas de ctl_agg ──────
+    # Ocorre quando múltiplas contas de controle (ex.: 821110100 e 821110200)
+    # aparecem juntas para o mesmo evento/fonte, cruzando com a mesma conta de orc
+    # (ex.: 721190300) e duplicando MOV_A nas linhas do resultado.
+    # Para cada grupo (emitente+UG_contab+doc+evento+EQ_GROUP+CONTA_A+FONTE_A):
+    #   • linha 0: DIFERENCA = MOV_A − soma(MOV_B)
+    #   • linhas 1+: DIFERENCA = 0 e campos a anulados (JS exibe '—')
+    _grp_a = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
+              "EQ_GROUP", "CONTA_A", "FONTE_A"]
+    _has_ab = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].notna()
+    if _has_ab.any():
+        df.loc[_has_ab, "_rn_a"]   = df.loc[_has_ab].groupby(_grp_a).cumcount()
+        df.loc[_has_ab, "_cnt_b"]  = df.loc[_has_ab].groupby(_grp_a)["CONTA_B"].transform("count")
+        df.loc[_has_ab, "_sum_b"]  = (
+            df.loc[_has_ab].groupby(_grp_a)["MOV_B"].transform("sum")
+        )
+        df["_rn_a"]  = df["_rn_a"].fillna(0).astype(int)
+        df["_cnt_b"] = df["_cnt_b"].fillna(1)
+        # Só ativa quando o grupo tem N>1 b-contas (1:N fan-out).
+        # Grupos com 1 b-conta já foram tratados corretamente pelo Passo 1.
+        _row0_a   = _has_ab & (df["_rn_a"] == 0) & (df["_cnt_b"] > 1)
+        _fanout_a = _has_ab & (df["_rn_a"] >= 1)
+        df.loc[_row0_a,   "DIFERENCA"] = df.loc[_row0_a, "MOV_A"] - df.loc[_row0_a, "_sum_b"]
+        df.loc[_fanout_a, "DIFERENCA"] = 0
+        df.loc[_fanout_a, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
+        df.drop(columns=["_rn_a", "_cnt_b", "_sum_b"], inplace=True)
+
+    df.drop(columns=["EQ_GROUP"], errors="ignore", inplace=True)
 
     print(f"[{datetime.now():%H:%M:%S}] {len(df):,} lançamentos retornados.")
     return df
