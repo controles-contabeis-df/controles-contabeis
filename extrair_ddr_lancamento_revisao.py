@@ -5,9 +5,9 @@ contas de controle (8XX) correspondentes, por par de contas/documento/evento/fon
 conforme MCASP 11a edicao. Gera HTML autocontido e publica no GitHub Pages.
 
 Uso:
-    python extrair_ddr_lancamento.py
-    python extrair_ddr_lancamento.py --ug 10101
-    python extrair_ddr_lancamento.py --no-push
+    python extrair_ddr_lancamento_revisao.py
+    python extrair_ddr_lancamento_revisao.py --ug 10101
+    python extrair_ddr_lancamento_revisao.py --no-push
 """
 
 import argparse
@@ -37,7 +37,7 @@ GITHUB_TOKEN  = os.environ["GITHUB_TOKEN"]
 GITHUB_USER   = os.environ["GITHUB_USER"]
 GITHUB_REPO   = os.environ["GITHUB_REPO"]
 GITHUB_BRANCH = os.environ["GITHUB_BRANCH"]
-ARQUIVO_HTML  = "ddr_lancamento.html"
+ARQUIVO_HTML  = "ddr_lancamento_revisao.html"
 
 # ── SQL ────────────────────────────────────────────────────────────────────────
 # Correlacao (MCASP 11a edicao):
@@ -840,56 +840,69 @@ def extrair(ug: str | None) -> pd.DataFrame:
     for col in ["MOV_A", "MOV_B", "DIFERENCA"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # ── Passo 1 (fan-out do lado A): N linhas de orc : 1 linha de ctl_agg ──────
-    # Ocorre quando N NEs da mesma fonte são lançados no mesmo evento (orc produz
-    # N linhas distintas que casam com 1 linha de ctl_agg).
-    # COGESTAO/COUG no agrupamento evita misturar lançamentos de UGs distintas
-    # dentro do mesmo documento; sem eles, _sum_a se anularia indevidamente.
-    # Para cada grupo (emitente+UG_contab+doc+evento+EQ_GROUP+CONTA_B+FONTE_B):
-    #   • linha 0: DIFERENCA = soma(MOV_A) − MOV_B
-    #   • linhas 1+: DIFERENCA = 0 e campos b anulados (JS exibe '—')
-    _grp_b = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
-              "EQ_GROUP", "CONTA_B", "FONTE_B"]
-    _has_b = df["CONTA_B"].notna() & df["FONTE_B"].notna()
-    if _has_b.any():
-        df.loc[_has_b, "_rn_b"]  = df.loc[_has_b].groupby(_grp_b).cumcount()
-        df.loc[_has_b, "_sum_a"] = (
-            df.loc[_has_b].groupby(_grp_b)["MOV_A"].transform("sum")
-        )
-        df["_rn_b"] = df["_rn_b"].fillna(0).astype(int)
-        _row0   = _has_b & (df["_rn_b"] == 0) & df["_sum_a"].notna()
-        _fanout = _has_b & (df["_rn_b"] >= 1)
-        df.loc[_row0,   "DIFERENCA"] = df.loc[_row0, "_sum_a"] - df.loc[_row0, "MOV_B"]
-        df.loc[_fanout, "DIFERENCA"] = 0
-        df.loc[_fanout, ["CONTA_B", "FONTE_B", "MOV_B"]] = None
-        df.drop(columns=["_rn_b", "_sum_a"], inplace=True)
+    # ── Tratamento N:M (fan-out unificado A×B) ───────────────────────────────
+    # O JOIN por EQ_GROUP pode produzir N linhas de orc × M linhas de ctl_agg
+    # para o mesmo grupo (ex.: EQ_GROUP=3 tem 622920103+631300000 × 821130200+821130100).
+    # A estratégia:
+    #   • Dentro de cada grupo, marcar a 1ª ocorrência de cada CONTA_A (_ra) e
+    #     a 1ª ocorrência de cada CONTA_B (_rb).
+    #   • DIFERENCA só na linha 0 do grupo (_rall==0): soma das primeiras ocorrências
+    #     de MOV_A menos soma das primeiras ocorrências de MOV_B.
+    #   • Demais linhas: DIFERENCA = 0.
+    #   • Linhas onde _ra>0 e _rb>0 (repetições de ambos os lados): suprimir
+    #     campos A e B (viram '—' no JS); DIFERENCA = 0.
+    #   • Linhas onde _ra==0 e _rb>0 (a-conta nova, b-conta repetida): mostrar
+    #     apenas lado A (limpar campos B).
+    #   • Linhas onde _ra>0 e _rb==0 (b-conta nova, a-conta repetida): mostrar
+    #     apenas lado B (limpar campos A).
+    _grp_nm = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG",
+               "NUDOCUMENTO", "COEVENTO", "EQ_GROUP", "FONTE_A"]
+    _has_both = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].notna()
+    if _has_both.any():
+        sub = df.loc[_has_both].copy()
+        sub["_ra"]   = sub.groupby(_grp_nm + ["CONTA_A"]).cumcount()
+        sub["_rb"]   = sub.groupby(_grp_nm + ["CONTA_B"]).cumcount()
+        sub["_rall"] = sub.groupby(_grp_nm).cumcount()
+        # Somas verdadeiras: apenas primeiras ocorrências de cada conta
+        _ta = (sub[sub["_ra"] == 0]
+               .groupby(_grp_nm)["MOV_A"].sum()
+               .rename("_ta"))
+        _tb = (sub[sub["_rb"] == 0]
+               .groupby(_grp_nm)["MOV_B"].sum()
+               .rename("_tb"))
+        sub = sub.join(_ta, on=_grp_nm).join(_tb, on=_grp_nm)
+        # DIFERENCA apenas na linha 0 de cada grupo
+        _r0 = sub["_rall"] == 0
+        sub.loc[_r0,  "DIFERENCA"] = sub.loc[_r0, "_ta"] - sub.loc[_r0, "_tb"]
+        sub.loc[~_r0, "DIFERENCA"] = 0
+        # Linha onde ambos são repetição: suprimir tudo
+        _ambos_rep = (sub["_ra"] > 0) & (sub["_rb"] > 0)
+        sub.loc[_ambos_rep, ["CONTA_A", "FONTE_A", "MOV_A",
+                              "CONTA_B", "FONTE_B", "MOV_B"]] = None
+        # Linha onde só B é repetição: mostrar apenas lado A
+        _so_b_rep = (sub["_ra"] == 0) & (sub["_rb"] > 0)
+        sub.loc[_so_b_rep, ["CONTA_B", "FONTE_B", "MOV_B"]] = None
+        # Linha onde só A é repetição: mostrar apenas lado B
+        _so_a_rep = (sub["_ra"] > 0) & (sub["_rb"] == 0)
+        sub.loc[_so_a_rep, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
+        sub.drop(columns=["_ra", "_rb", "_rall", "_ta", "_tb"], inplace=True)
+        df.loc[_has_both] = sub
 
-    # ── Passo 2 (fan-out do lado B): 1 linha de orc : N linhas de ctl_agg ──────
-    # Ocorre quando múltiplas contas de controle (ex.: 821110100 e 821110200)
-    # aparecem juntas para o mesmo evento/fonte, cruzando com a mesma conta de orc
-    # (ex.: 721190300) e duplicando MOV_A nas linhas do resultado.
-    # Para cada grupo (emitente+UG_contab+doc+evento+EQ_GROUP+CONTA_A+FONTE_A):
-    #   • linha 0: DIFERENCA = MOV_A − soma(MOV_B)
-    #   • linhas 1+: DIFERENCA = 0 e campos a anulados (JS exibe '—')
-    _grp_a = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
-              "EQ_GROUP", "CONTA_A", "FONTE_A"]
-    _has_ab = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].notna()
-    if _has_ab.any():
-        df.loc[_has_ab, "_rn_a"]   = df.loc[_has_ab].groupby(_grp_a).cumcount()
-        df.loc[_has_ab, "_cnt_b"]  = df.loc[_has_ab].groupby(_grp_a)["CONTA_B"].transform("count")
-        df.loc[_has_ab, "_sum_b"]  = (
-            df.loc[_has_ab].groupby(_grp_a)["MOV_B"].transform("sum")
-        )
-        df["_rn_a"]  = df["_rn_a"].fillna(0).astype(int)
-        df["_cnt_b"] = df["_cnt_b"].fillna(1)
-        # Só ativa quando o grupo tem N>1 b-contas (1:N fan-out).
-        # Grupos com 1 b-conta já foram tratados corretamente pelo Passo 1.
-        _row0_a   = _has_ab & (df["_rn_a"] == 0) & (df["_cnt_b"] > 1)
-        _fanout_a = _has_ab & (df["_rn_a"] >= 1)
-        df.loc[_row0_a,   "DIFERENCA"] = df.loc[_row0_a, "MOV_A"] - df.loc[_row0_a, "_sum_b"]
-        df.loc[_fanout_a, "DIFERENCA"] = 0
-        df.loc[_fanout_a, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
-        df.drop(columns=["_rn_a", "_cnt_b", "_sum_b"], inplace=True)
+    # Descartar linhas onde ambos os lados foram suprimidos (sem conteúdo)
+    _ambas_nulas = df["CONTA_A"].isna() & df["CONTA_B"].isna()
+    df = df[~_ambas_nulas].copy()
+
+    # ── Fan-out apenas do lado A (sem CONTA_B): N orc : 0 ctl ────────────
+    # Caso onde há MOV_A mas nenhuma conta de controle correspondente.
+    _grp_b = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
+              "EQ_GROUP", "FONTE_A"]
+    _has_a_only = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].isna()
+    if _has_a_only.any():
+        df.loc[_has_a_only, "_rn"] = df.loc[_has_a_only].groupby(_grp_b).cumcount()
+        df["_rn"] = df["_rn"].fillna(0).astype(int)
+        _fan_a = _has_a_only & (df["_rn"] >= 1)
+        df.loc[_fan_a, "DIFERENCA"] = 0
+        df.drop(columns=["_rn"], inplace=True)
 
     df.drop(columns=["EQ_GROUP"], errors="ignore", inplace=True)
 
