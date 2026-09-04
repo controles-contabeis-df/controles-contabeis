@@ -211,6 +211,18 @@ ctl AS (
     FROM por_conta
     WHERE COCONTACONTABIL IN (821120100,821120200,821130200,821130100,
                                821140000,821130300,821110100,821110200)
+    UNION ALL
+    -- 821120100 tambem integra o par de 721190300 (MCASP 11a ed.)
+    SELECT
+        COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
+        INMES, NUDOCUMENTO, COEVENTO, DALANCAMENTO,
+        821120100 AS CONTA_B_REAL,
+        721190300 AS CONTA_KEY,
+        6         AS EQ_GROUP,
+        TO_NUMBER(SUBSTR(COCONTACORRENTE, 1, 9)) AS FONTE_B,
+        VLNET     AS MOV_B
+    FROM por_conta
+    WHERE COCONTACONTABIL = 821120100
 ),
 ctl_agg AS (
     -- Agrega por (emitente, documento, evento, conta_key, conta_b_real, fonte_b)
@@ -250,7 +262,7 @@ FULL OUTER JOIN ctl_agg c
     AND o.INMES         = c.INMES
     AND o.NUDOCUMENTO   = c.NUDOCUMENTO
     AND o.COEVENTO      = c.COEVENTO
-    AND o.EQ_GROUP      = c.EQ_GROUP
+    AND o.CONTA_A       = c.CONTA_KEY
     AND (o.FONTE_A      = c.FONTE_B OR (o.FONTE_A IS NULL AND c.FONTE_B IS NULL))
 ORDER BY
     COALESCE(o.DALANCAMENTO, c.DALANCAMENTO),
@@ -840,69 +852,26 @@ def extrair(ug: str | None) -> pd.DataFrame:
     for col in ["MOV_A", "MOV_B", "DIFERENCA"]:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # ── Tratamento N:M (fan-out unificado A×B) ───────────────────────────────
-    # O JOIN por EQ_GROUP pode produzir N linhas de orc × M linhas de ctl_agg
-    # para o mesmo grupo (ex.: EQ_GROUP=3 tem 622920103+631300000 × 821130200+821130100).
-    # A estratégia:
-    #   • Dentro de cada grupo, marcar a 1ª ocorrência de cada CONTA_A (_ra) e
-    #     a 1ª ocorrência de cada CONTA_B (_rb).
-    #   • DIFERENCA só na linha 0 do grupo (_rall==0): soma das primeiras ocorrências
-    #     de MOV_A menos soma das primeiras ocorrências de MOV_B.
-    #   • Demais linhas: DIFERENCA = 0.
-    #   • Linhas onde _ra>0 e _rb>0 (repetições de ambos os lados): suprimir
-    #     campos A e B (viram '—' no JS); DIFERENCA = 0.
-    #   • Linhas onde _ra==0 e _rb>0 (a-conta nova, b-conta repetida): mostrar
-    #     apenas lado A (limpar campos B).
-    #   • Linhas onde _ra>0 e _rb==0 (b-conta nova, a-conta repetida): mostrar
-    #     apenas lado B (limpar campos A).
-    _grp_nm = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG",
-               "NUDOCUMENTO", "COEVENTO", "EQ_GROUP", "FONTE_A"]
-    _has_both = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].notna()
+    # ── Fan-out lado B (1:N): 1 conta-A com N contas-B ──────────────────────
+    # Com JOIN por CONTA_A = CONTA_KEY, ocorre apenas quando a mesma conta-A
+    # está associada a múltiplas contas de controle (ex.: 721190300 → 821110100
+    # e 821110200). Para cada grupo (emitente, UG, doc, evento, CONTA_A, FONTE_A):
+    #   • linha 0: DIFERENCA = MOV_A − soma(MOV_B)
+    #   • linhas 1+: DIFERENCA = 0 e campos A anulados (JS exibe '—')
+    _grp_a = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG",
+              "NUDOCUMENTO", "COEVENTO", "CONTA_A", "FONTE_A"]
+    _has_both = df["CONTA_A"].notna() & df["CONTA_B"].notna()
     if _has_both.any():
-        sub = df.loc[_has_both].copy()
-        sub["_ra"]   = sub.groupby(_grp_nm + ["CONTA_A"]).cumcount()
-        sub["_rb"]   = sub.groupby(_grp_nm + ["CONTA_B"]).cumcount()
-        sub["_rall"] = sub.groupby(_grp_nm).cumcount()
-        # Somas verdadeiras: apenas primeiras ocorrências de cada conta
-        _ta = (sub[sub["_ra"] == 0]
-               .groupby(_grp_nm)["MOV_A"].sum()
-               .rename("_ta"))
-        _tb = (sub[sub["_rb"] == 0]
-               .groupby(_grp_nm)["MOV_B"].sum()
-               .rename("_tb"))
-        sub = sub.join(_ta, on=_grp_nm).join(_tb, on=_grp_nm)
-        # DIFERENCA apenas na linha 0 de cada grupo
-        _r0 = sub["_rall"] == 0
-        sub.loc[_r0,  "DIFERENCA"] = sub.loc[_r0, "_ta"] - sub.loc[_r0, "_tb"]
-        sub.loc[~_r0, "DIFERENCA"] = 0
-        # Linha onde ambos são repetição: suprimir tudo
-        _ambos_rep = (sub["_ra"] > 0) & (sub["_rb"] > 0)
-        sub.loc[_ambos_rep, ["CONTA_A", "FONTE_A", "MOV_A",
-                              "CONTA_B", "FONTE_B", "MOV_B"]] = None
-        # Linha onde só B é repetição: mostrar apenas lado A
-        _so_b_rep = (sub["_ra"] == 0) & (sub["_rb"] > 0)
-        sub.loc[_so_b_rep, ["CONTA_B", "FONTE_B", "MOV_B"]] = None
-        # Linha onde só A é repetição: mostrar apenas lado B
-        _so_a_rep = (sub["_ra"] > 0) & (sub["_rb"] == 0)
-        sub.loc[_so_a_rep, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
-        sub.drop(columns=["_ra", "_rb", "_rall", "_ta", "_tb"], inplace=True)
-        df.loc[_has_both] = sub
-
-    # Descartar linhas onde ambos os lados foram suprimidos (sem conteúdo)
-    _ambas_nulas = df["CONTA_A"].isna() & df["CONTA_B"].isna()
-    df = df[~_ambas_nulas].copy()
-
-    # ── Fan-out apenas do lado A (sem CONTA_B): N orc : 0 ctl ────────────
-    # Caso onde há MOV_A mas nenhuma conta de controle correspondente.
-    _grp_b = ["COGESTAO_EMIT", "COUG_EMIT", "COGESTAO", "COUG", "NUDOCUMENTO", "COEVENTO",
-              "EQ_GROUP", "FONTE_A"]
-    _has_a_only = df["CONTA_A"].notna() & df["FONTE_A"].notna() & df["CONTA_B"].isna()
-    if _has_a_only.any():
-        df.loc[_has_a_only, "_rn"] = df.loc[_has_a_only].groupby(_grp_b).cumcount()
-        df["_rn"] = df["_rn"].fillna(0).astype(int)
-        _fan_a = _has_a_only & (df["_rn"] >= 1)
-        df.loc[_fan_a, "DIFERENCA"] = 0
-        df.drop(columns=["_rn"], inplace=True)
+        sub = df[_has_both].copy()
+        sub["_rn"] = sub.groupby(_grp_a, dropna=False).cumcount()
+        sub["_sum_b"] = sub.groupby(_grp_a, dropna=False)["MOV_B"].transform("sum")
+        _r0  = sub["_rn"] == 0
+        _rn  = sub["_rn"] >= 1
+        sub.loc[_r0, "DIFERENCA"] = sub.loc[_r0, "MOV_A"] - sub.loc[_r0, "_sum_b"]
+        sub.loc[_rn, "DIFERENCA"] = 0
+        sub.loc[_rn, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
+        sub.drop(columns=["_rn", "_sum_b"], inplace=True)
+        df = pd.concat([df[~_has_both], sub], ignore_index=True)
 
     df.drop(columns=["EQ_GROUP"], errors="ignore", inplace=True)
 

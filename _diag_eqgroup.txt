@@ -1,0 +1,23 @@
+=== Linhas por EQ_GROUP ===
+EQ_GROUP
+1    417407
+2     12584
+3    602578
+4    303229
+5     23715
+6    589973
+
+=== DIFERENCA total por EQ_GROUP (ambos os lados) ===
+EQ_GROUP
+1    1.029190e+08
+2    3.718811e+07
+3    1.111676e+10
+4   -1.300275e+10
+5    0.000000e+00
+6    2.688541e+08
+
+=== Grupos N:M reais em EQ_GROUP=3: 2 ===
+                                                          CONTA_A  CONTA_B
+NUDOCUMENTO COGESTAO_EMIT COUG_EMIT COEVENTO FONTE_A                      
+2026OB00278 20204         200204    600013   100000000.0        2        2
+2026OB00279 20204         200204    600014   100000000.0        2        2
