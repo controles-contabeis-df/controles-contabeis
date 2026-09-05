@@ -116,72 +116,86 @@ por_conta AS (
              INMES, NUDOCUMENTO, COCONTACONTABIL, COEVENTO, COCONTACORRENTE
 ),
 orc AS (
+    -- Agrega por (UG Contabilizadora + conta + fonte) dentro de cada lancamento,
+    -- colapsando multiplas NEs com mesma FONTE em uma unica linha antes do JOIN.
     SELECT
-        pc.COGESTAO_EMIT, pc.COUG_EMIT, pc.COGESTAO, pc.COUG,
-        pc.INMES, pc.NUDOCUMENTO, pc.COEVENTO, pc.DALANCAMENTO,
-        pc.COCONTACONTABIL AS CONTA_A,
-        CASE pc.COCONTACONTABIL
-            WHEN 622920101 THEN '821120100'
-            WHEN 622920102 THEN '821120200'
-            WHEN 622920103 THEN '821130200 + 821130100'
-            WHEN 622920104 THEN '821140000'
-            WHEN 827110401 THEN '821130300'
-            WHEN 827110402 THEN '821140000'
-            WHEN 721190300 THEN '821110100 + 821110200 + 821120100'
-            -- Restos a Pagar (63XXXXXXX)
-            WHEN 631100000 THEN '821120100'
-            WHEN 631810000 THEN '821120100'
-            WHEN 631200000 THEN '821120200'
-            WHEN 631820000 THEN '821120200'
-            WHEN 631300000 THEN '821130200 + 821130100'
-            WHEN 632110100 THEN '821130200 + 821130100'
-            WHEN 632110200 THEN '821130200 + 821130100'
-            WHEN 632110300 THEN '821130200 + 821130100'
-            WHEN 632110400 THEN '821130200 + 821130100'
-            WHEN 631400000 THEN '821140000'
-            ELSE CASE WHEN pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999 THEN '821140000' END
-        END AS CONTA_B_REF,
-        -- EQ_GROUP: identifica a equação; chave real do JOIN com ctl
-        CASE
-            WHEN pc.COCONTACONTABIL IN (622920101,631100000,631810000)               THEN 1
-            WHEN pc.COCONTACONTABIL IN (622920102,631200000,631820000)               THEN 2
-            WHEN pc.COCONTACONTABIL IN (622920103,631300000,
-                                        632110100,632110200,632110300,632110400)     THEN 3
-            WHEN pc.COCONTACONTABIL IN (622920104,631400000,827110402)
-              OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)                THEN 4
-            WHEN pc.COCONTACONTABIL = 827110401                                      THEN 5
-            WHEN pc.COCONTACONTABIL = 721190300                                      THEN 6
-        END AS EQ_GROUP,
-        CASE
-            WHEN pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104)
-                THEN ne.COFONTE
-            WHEN pc.COCONTACONTABIL IN (631100000,631810000,631200000,631820000,
-                631300000,632110100,632110200,632110300,632110400,631400000)
-              OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)
-                THEN nerp.COFONTE
-            ELSE TO_NUMBER(SUBSTR(pc.COCONTACORRENTE, 1, 9))
-        END AS FONTE_A,
-        pc.VLNET AS MOV_A
-    FROM por_conta pc
-    LEFT JOIN {schema}NOTAEMPENHO ne
-        ON  pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104)
-        AND ne.NUNE        = SUBSTR(pc.COCONTACORRENTE, 1, 11)
-        AND ne.COGESTAO    = pc.COGESTAO_EMIT
-        AND ne.COUG        = pc.COUG_EMIT
-    LEFT JOIN {schema}NERESTOPAGAR nerp
-        ON  (pc.COCONTACONTABIL IN (631100000,631810000,631200000,631820000,
-                631300000,632110100,632110200,632110300,632110400,631400000)
-             OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999))
-        AND nerp.NUNE      = SUBSTR(pc.COCONTACORRENTE, 1, 11)
-        AND nerp.COGESTAO  = pc.COGESTAO_EMIT
-        AND nerp.COUG      = pc.COUG_EMIT
-    WHERE pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104,721190300,827110401,827110402,
-        631100000,631810000,631200000,631820000,
-        631300000,632110100,632110200,632110300,632110400,631400000)
-       OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)
+        COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
+        INMES, NUDOCUMENTO, COEVENTO,
+        MIN(DALANCAMENTO) AS DALANCAMENTO,
+        CONTA_A, CONTA_B_REF, EQ_GROUP, FONTE_A,
+        SUM(MOV_A) AS MOV_A
+    FROM (
+        SELECT
+            pc.COGESTAO_EMIT, pc.COUG_EMIT, pc.COGESTAO, pc.COUG,
+            pc.INMES, pc.NUDOCUMENTO, pc.COEVENTO, pc.DALANCAMENTO,
+            pc.COCONTACONTABIL AS CONTA_A,
+            CASE pc.COCONTACONTABIL
+                WHEN 622920101 THEN '821120100'
+                WHEN 622920102 THEN '821120200'
+                WHEN 622920103 THEN '821130200 + 821130100'
+                WHEN 622920104 THEN '821140000'
+                WHEN 827110401 THEN '821130300'
+                WHEN 827110402 THEN '821140000'
+                WHEN 721190300 THEN '821110100 + 821110200 + 821120100'
+                WHEN 631100000 THEN '821120100'
+                WHEN 631810000 THEN '821120100'
+                WHEN 631200000 THEN '821120200'
+                WHEN 631820000 THEN '821120200'
+                WHEN 631300000 THEN '821130200 + 821130100'
+                WHEN 632110100 THEN '821130200 + 821130100'
+                WHEN 632110200 THEN '821130200 + 821130100'
+                WHEN 632110300 THEN '821130200 + 821130100'
+                WHEN 632110400 THEN '821130200 + 821130100'
+                WHEN 631400000 THEN '821140000'
+                ELSE CASE WHEN pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999
+                          THEN '821140000' END
+            END AS CONTA_B_REF,
+            CASE
+                WHEN pc.COCONTACONTABIL IN (622920101,631100000,631810000)               THEN 1
+                WHEN pc.COCONTACONTABIL IN (622920102,631200000,631820000)               THEN 2
+                WHEN pc.COCONTACONTABIL IN (622920103,631300000,
+                                            632110100,632110200,632110300,632110400)     THEN 3
+                WHEN pc.COCONTACONTABIL IN (622920104,631400000,827110402)
+                  OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)                THEN 4
+                WHEN pc.COCONTACONTABIL = 827110401                                      THEN 5
+                WHEN pc.COCONTACONTABIL = 721190300                                      THEN 6
+            END AS EQ_GROUP,
+            CASE
+                WHEN pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104)
+                    THEN ne.COFONTE
+                WHEN pc.COCONTACONTABIL IN (631100000,631810000,631200000,631820000,
+                    631300000,632110100,632110200,632110300,632110400,631400000)
+                  OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)
+                    THEN nerp.COFONTE
+                ELSE TO_NUMBER(SUBSTR(pc.COCONTACORRENTE, 1, 9))
+            END AS FONTE_A,
+            pc.VLNET AS MOV_A
+        FROM por_conta pc
+        LEFT JOIN {schema}NOTAEMPENHO ne
+            ON  pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104)
+            AND ne.NUNE        = SUBSTR(pc.COCONTACORRENTE, 1, 11)
+            AND ne.COGESTAO    = pc.COGESTAO_EMIT
+            AND ne.COUG        = pc.COUG_EMIT
+        LEFT JOIN {schema}NERESTOPAGAR nerp
+            ON  (pc.COCONTACONTABIL IN (631100000,631810000,631200000,631820000,
+                    631300000,632110100,632110200,632110300,632110400,631400000)
+                 OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999))
+            AND nerp.NUNE      = SUBSTR(pc.COCONTACORRENTE, 1, 11)
+            AND nerp.COGESTAO  = pc.COGESTAO_EMIT
+            AND nerp.COUG      = pc.COUG_EMIT
+        WHERE pc.COCONTACONTABIL IN (622920101,622920102,622920103,622920104,
+            721190300,827110401,827110402,
+            631100000,631810000,631200000,631820000,
+            631300000,632110100,632110200,632110300,632110400,631400000)
+           OR (pc.COCONTACONTABIL BETWEEN 632210000 AND 632219999)
+    ) orc_raw
+    GROUP BY COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
+             INMES, NUDOCUMENTO, COEVENTO,
+             CONTA_A, CONTA_B_REF, EQ_GROUP, FONTE_A
 ),
 ctl AS (
     -- Contas de controle; CONTA_B_REAL = conta individual sensibilizada (ex: 821130200)
+    -- CONTA_KEY = chave canonica da equacao (622920xxx ou 827110401 ou 721190300)
     SELECT
         COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
         INMES, NUDOCUMENTO, COEVENTO, DALANCAMENTO,
@@ -212,7 +226,7 @@ ctl AS (
     WHERE COCONTACONTABIL IN (821120100,821120200,821130200,821130100,
                                821140000,821130300,821110100,821110200)
     UNION ALL
-    -- 821120100 tambem integra o par de 721190300 (MCASP 11a ed.)
+    -- EQ6: 821120100 tambem integra o par de 721190300 (MCASP 11a ed.)
     SELECT
         COGESTAO_EMIT, COUG_EMIT, COGESTAO, COUG,
         INMES, NUDOCUMENTO, COEVENTO, DALANCAMENTO,
@@ -389,6 +403,20 @@ tfoot td{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pad
 tfoot td.left{text-align:left}
 .empty{text-align:center;padding:56px;color:var(--muted)}
 #pag{display:flex;justify-content:center;align-items:center;gap:6px;padding:14px 28px;flex-wrap:wrap}
+.eq-bar{padding:6px 28px 0}
+.eq-toggle{display:flex;align-items:center;gap:7px;cursor:pointer;user-select:none;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;width:fit-content;padding:4px 0}
+.eq-toggle:hover{color:var(--navy)}
+.eq-arrow{font-size:10px;transition:transform .2s}
+.eq-panel{display:none;margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.eq-panel.open{display:block}
+.eq-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:0}
+.eq-row{display:flex;align-items:flex-start;gap:10px;padding:9px 16px;border-bottom:1px solid var(--border);font-size:11.5px}
+.eq-row:last-child{border-bottom:none}
+.eq-num{font-weight:700;color:var(--navy);min-width:28px;flex-shrink:0;font-family:'Consolas','Courier New',monospace;font-size:12px}
+.eq-accounts{display:flex;align-items:flex-start;gap:8px;flex:1;flex-wrap:wrap}
+.eq-side{display:flex;flex-direction:column;gap:2px}
+.eq-side span{font-family:'Consolas','Courier New',monospace;font-size:11px;color:var(--text);background:#f0f4fb;border-radius:4px;padding:1px 6px;white-space:nowrap}
+.eq-arrow-mid{color:var(--teal);font-weight:700;font-size:14px;align-self:center;flex-shrink:0}
 </style>
 </head>
 <body>
@@ -472,6 +500,75 @@ tfoot td.left{text-align:left}
 </div>
 
 <div class="krow" id="krow"></div>
+
+<div class="eq-bar">
+  <div class="eq-toggle" onclick="toggleEq()">
+    <span class="eq-arrow" id="eq-arrow">▶</span> Equações mapeadas (6)
+  </div>
+  <div class="eq-panel" id="eq-panel">
+    <div class="eq-grid">
+      <div class="eq-row">
+        <span class="eq-num">EQ1</span>
+        <div class="eq-accounts">
+          <div class="eq-side">
+            <span>622920101</span><span>631100000</span><span>631810000</span>
+          </div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side"><span>821120100</span></div>
+        </div>
+      </div>
+      <div class="eq-row">
+        <span class="eq-num">EQ2</span>
+        <div class="eq-accounts">
+          <div class="eq-side">
+            <span>622920102</span><span>631200000</span><span>631820000</span>
+          </div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side"><span>821120200</span></div>
+        </div>
+      </div>
+      <div class="eq-row">
+        <span class="eq-num">EQ3</span>
+        <div class="eq-accounts">
+          <div class="eq-side">
+            <span>622920103</span><span>631300000</span>
+            <span>632110100</span><span>632110200</span><span>632110300</span><span>632110400</span>
+          </div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side"><span>821130200</span><span>821130100</span></div>
+        </div>
+      </div>
+      <div class="eq-row">
+        <span class="eq-num">EQ4</span>
+        <div class="eq-accounts">
+          <div class="eq-side">
+            <span>622920104</span><span>631400000</span><span>827110402</span><span>632210xxx</span>
+          </div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side"><span>821140000</span></div>
+        </div>
+      </div>
+      <div class="eq-row">
+        <span class="eq-num">EQ5</span>
+        <div class="eq-accounts">
+          <div class="eq-side"><span>721190300</span></div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side">
+            <span>821110100</span><span>821110200</span><span>821120100</span>
+          </div>
+        </div>
+      </div>
+      <div class="eq-row">
+        <span class="eq-num">EQ6</span>
+        <div class="eq-accounts">
+          <div class="eq-side"><span>827110401</span></div>
+          <span class="eq-arrow-mid">↔</span>
+          <div class="eq-side"><span>821130300</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div class="tsec">
   <div class="thead-row">
@@ -754,6 +851,11 @@ function renderEventos(){
   if(!n){etb.innerHTML='<tr><td colspan="3" style="text-align:center;color:var(--muted);padding:16px">Nenhum evento nos dados filtrados.</td></tr>';return;}
   etb.innerHTML=evData.map(e=>'<tr><td>'+e[0]+'</td><td>'+e[1].docs.size.toLocaleString('pt-BR')+'</td><td class="'+vc(e[1].dif)+'">'+brl(e[1].dif)+'</td></tr>').join('');
 }
+function toggleEq(){
+  const p=document.getElementById('eq-panel'),a=document.getElementById('eq-arrow');
+  const open=p.classList.toggle('open');
+  a.textContent=open?'▼':'▶';
+}
 function toggleEv(e){
   e.stopPropagation();
   const p=document.getElementById('ev-popup');
@@ -869,9 +971,25 @@ def extrair(ug: str | None) -> pd.DataFrame:
         _rn  = sub["_rn"] >= 1
         sub.loc[_r0, "DIFERENCA"] = sub.loc[_r0, "MOV_A"] - sub.loc[_r0, "_sum_b"]
         sub.loc[_rn, "DIFERENCA"] = 0
-        sub.loc[_rn, ["CONTA_A", "FONTE_A", "MOV_A"]] = None
+        sub.loc[_rn, "MOV_A"] = None  # MOV_A zerado p/ nao duplo-contar; CONTA_A permanece visivel
         sub.drop(columns=["_rn", "_sum_b"], inplace=True)
         df = pd.concat([df[~_has_both], sub], ignore_index=True)
+
+    # Preenche o lado ausente em equações com conta única em cada ponta.
+    # Garante que o painel exiba a conta esperada mesmo quando ela não foi
+    # movimentada diretamente no documento.
+
+    # EQ1 (grupo 1): único b = 821120100 → preenche quando a existe mas b não
+    df.loc[df["CONTA_B"].isna() & (df["EQ_GROUP"] == 1), "CONTA_B"] = 821120100
+    # EQ2 (grupo 2): único b = 821120200
+    df.loc[df["CONTA_B"].isna() & (df["EQ_GROUP"] == 2), "CONTA_B"] = 821120200
+    # EQ4 (grupo 4): único b = 821140000
+    df.loc[df["CONTA_B"].isna() & (df["EQ_GROUP"] == 4), "CONTA_B"] = 821140000
+    # EQ6-usuária (grupo 5): 827110401 ↔ 821130300 — preenche o lado que faltar
+    df.loc[df["CONTA_B"].isna() & (df["EQ_GROUP"] == 5), "CONTA_B"] = 821130300
+    df.loc[df["CONTA_A"].isna() & (df["EQ_GROUP"] == 5), "CONTA_A"] = 827110401
+    # EQ5-usuária (grupo 6): 721190300 ↔ {821110100/821110200/821120100}
+    df.loc[df["CONTA_A"].isna() & (df["EQ_GROUP"] == 6), "CONTA_A"] = 721190300
 
     df.drop(columns=["EQ_GROUP"], errors="ignore", inplace=True)
 
