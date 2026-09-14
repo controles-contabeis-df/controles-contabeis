@@ -13,7 +13,7 @@ Regras aplicadas (conforme decidido com a usuaria):
     celebracao/vigencia, situacao, valor global e valor repassado.
   - Filtros de topo por Ente, Ano e Situacao em cada aba.
 
-Salva transferegov_df_painel.html na mesma pasta.
+Salva transferegov.html na mesma pasta.
 """
 
 import json
@@ -502,7 +502,7 @@ def main():
         data_geracao=pd.Timestamp.now().strftime("%d/%m/%Y %H:%M"),
     )
 
-    saida = PASTA / "transferegov_df_painel.html"
+    saida = PASTA / "transferegov.html"
     saida.write_text(html, encoding="utf-8")
     print(f"Painel salvo em {saida}")
     for aid, df in dados.items():
@@ -584,7 +584,7 @@ tbody tr:hover td{{background:var(--hover)}}
 <body>
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">🏛️</div>
+    <div class="hlogo">🤝</div>
     <h1>TRANSFEREGOV<span>Visão consolidada — somente órgãos/entidades do Distrito Federal</span></h1>
   </div>
   <span id="ts">Gerado em {data_geracao}</span>
