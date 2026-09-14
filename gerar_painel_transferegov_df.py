@@ -53,16 +53,32 @@ def eh_gdf(serie_cnpj: pd.Series) -> pd.Series:
     return normalizar_cnpj(serie_cnpj).isin(CNPJS_GDF)
 
 
+def _parse_data(serie):
+    """
+    Converte a serie para datetime tentando primeiro o formato ISO (usado pelas
+    APIs do TransfereGov: AAAA-MM-DD, com ou sem hora) e so depois o formato
+    brasileiro dd/mm/aaaa (usado nos CSVs do SICONV). Fazer as duas tentativas
+    numa unica chamada com dayfirst=True causa falhas intermitentes de parse
+    em datas ISO validas (bug observado: ~1/3 das datas de vigencia do Fundo
+    a Fundo viravam NaT mesmo sendo strings AAAA-MM-DD perfeitamente validas).
+    """
+    s = serie.astype(str)
+    dt = pd.to_datetime(s, format="ISO8601", errors="coerce")
+    faltando = dt.isna() & serie.notna()
+    if faltando.any():
+        dt.loc[faltando] = pd.to_datetime(s[faltando], dayfirst=True, errors="coerce")
+    return dt
+
+
 def fmt_data(serie):
     """Converte para dd/mm/aaaa quando possivel, mantendo string original se falhar."""
-    dt = pd.to_datetime(serie, errors="coerce", dayfirst=True)
+    dt = _parse_data(serie)
     saida = dt.dt.strftime("%d/%m/%Y")
     return saida.where(dt.notna(), serie)
 
 
 def extrair_ano(serie):
-    dt = pd.to_datetime(serie, errors="coerce", dayfirst=True)
-    return dt.dt.year
+    return _parse_data(serie).dt.year
 
 
 # ---------------------------------------------------------------------------
@@ -100,46 +116,106 @@ def montar_parcerias():
     saida = pd.DataFrame({
         "Nº Parceria": df["cd_parceria"].fillna(df["id_proposta"].astype("Int64").astype(str)),
         "Ente beneficiário": df["nm_ente_recebedor"],
-        "Natureza jurídica": df["nm_natureza_juridica"],
-        "Ente concedente": df["nm_unidade_gestora"],
-        "Objeto": df["ds_objeto"].astype(str).str.slice(0, 160),
+        "Objeto": df["ds_objeto"].astype(str).str.slice(0, 100),
         "Situação": df["situacao"],
-        "Data de celebração": fmt_data(df["dh_assinatura"]),
         "Ano": df["ano_proposta"],
         "Valor global (R$)": df["valor_global"],
         "Valor repassado (R$)": df["valor_repassado"],
-        "Processo SEI": df["cd_processo_sei"],
     })
-    return saida.sort_values("Ano", ascending=False, na_position="last")
+    params = {
+        "Nº Parceria": "parceria.cd_parceria",
+        "Ente beneficiário": "proposta.nm_ente_recebedor",
+        "Objeto": "proposta.ds_objeto",
+        "Situação": "parceria.in_situacao_parceria",
+        "Ano": "proposta.ano_proposta",
+        "Valor global (R$)": "proposta.nr_vlr_total",
+        "Valor repassado (R$)": "Σ ordem-pagamento.vl_ordem_pagamento",
+    }
+    return saida.sort_values("Ano", ascending=False, na_position="last"), params
 
 
 # ---------------------------------------------------------------------------
 # 2) Transferencias Especiais
 # ---------------------------------------------------------------------------
 
+def categoria_despesa(custeio, investimento):
+    c = num(custeio)
+    i = num(investimento)
+    def classifica(cv, iv):
+        if cv == 0 and iv == 0:
+            return ""
+        if iv == 0:
+            return "Custeio"
+        if cv == 0:
+            return "Investimento"
+        return "Custeio e Investimento"
+    return pd.Series([classifica(cv, iv) for cv, iv in zip(c, i)], index=custeio.index if hasattr(custeio, "index") else None)
+
+
 def montar_especiais():
     plano = carregar("df_especiais_plano_acao.csv")
     beneficiario = carregar("df_especiais_beneficiario.csv")
-    colunas = ["Nº Plano de Ação", "Ente beneficiário", "Ente concedente", "Parlamentar autor da emenda",
-               "Objeto", "Situação", "Ano", "Valor do plano (R$)"]
+    empenho = carregar("df_especiais_empenho.csv")
+    doc_habil = carregar("df_especiais_documento_habil.csv")
+    ordem_pag = carregar("df_especiais_ordem_pagamento.csv")
+    executor = carregar("df_especiais_executor.csv")
+
+    colunas = ["Nº Plano de Ação", "Nº Emenda Parlamentar", "Ente beneficiário", "Órgão executor",
+               "Parlamentar autor da emenda", "Situação", "Ano", "Valor do plano (R$)", "Valor pago (R$)"]
+    params = {
+        "Nº Plano de Ação": "plano_acao.codigo_plano_acao",
+        "Nº Emenda Parlamentar": "plano_acao.numero_emenda_parlamentar_plano_acao",
+        "Ente beneficiário": "beneficiario.nome_beneficiario",
+        "Órgão executor": "executor.nome_executor",
+        "Parlamentar autor da emenda": "plano_acao.nome_parlamentar_emenda_plano_acao",
+        "Situação": "plano_acao.situacao_plano_acao",
+        "Ano": "plano_acao.ano_plano_acao",
+        "Valor do plano (R$)": "valor_custeio_plano_acao + valor_investimento_plano_acao",
+        "Valor pago (R$)": "Σ documento-habil.valor_dh (c/ ordem-pagamento ENVIADA·PAGO)",
+    }
     if plano.empty:
-        return pd.DataFrame(columns=colunas)
+        return pd.DataFrame(columns=colunas), params
+
+    # "Ente beneficiário" formal e sempre DISTRITO FEDERAL (emenda especial cai
+    # direto na conta unica do ente federativo - ver memoria project_transferegov
+    # _gdf_vs_privado). "Orgao executor" (endpoint /executores-especiais) traz a
+    # secretaria/orgao que de fato executa o recurso - e o dado especifico que
+    # faltava.
+    if not executor.empty:
+        executor_por_plano = executor.drop_duplicates(subset="id_plano_acao").set_index("id_plano_acao")["nome_executor"]
+    else:
+        executor_por_plano = pd.Series(dtype=str)
+
+    # Valor pago (regra do setor de Transparencia): somar valor_dh dos documentos
+    # habeis cuja ordem de pagamento tenha situacao contendo ENVIADA ou PAGO,
+    # seguindo a cadeia empenho -> documento_habil -> ordem_pagamento.
+    if not doc_habil.empty and not ordem_pag.empty:
+        situacao_ok = ordem_pag["descricao_situacao_op"].astype(str).str.upper().str.contains("ENVIADA|PAGO", na=False)
+        ids_dh_pagos = set(ordem_pag.loc[situacao_ok, "id_dh"].dropna())
+        doc_pago = doc_habil[doc_habil["id_dh"].isin(ids_dh_pagos)]
+        doc_pago = doc_pago.merge(empenho[["id_empenho", "id_plano_acao"]], on="id_empenho", how="left")
+        valor_pago_por_plano = doc_pago.groupby("id_plano_acao")["valor_dh"].sum()
+    else:
+        valor_pago_por_plano = pd.Series(dtype=float)
 
     plano = plano.merge(beneficiario[["id_beneficiario", "nome_beneficiario", "cnpj_beneficiario"]], on="id_beneficiario", how="left")
     plano = plano[eh_gdf(plano["cnpj_beneficiario"])].copy()
     plano["valor"] = num(plano.get("valor_custeio_plano_acao")) + num(plano.get("valor_investimento_plano_acao"))
+    plano["valor_pago"] = plano["id_plano_acao"].map(valor_pago_por_plano).fillna(0)
+    plano["orgao_executor"] = plano["id_plano_acao"].map(executor_por_plano).fillna("")
 
     saida = pd.DataFrame({
         "Nº Plano de Ação": plano["codigo_plano_acao"],
+        "Nº Emenda Parlamentar": plano["numero_emenda_parlamentar_plano_acao"],
         "Ente beneficiário": plano["nome_beneficiario"],
-        "Ente concedente": "União — Emenda Parlamentar (Câmara dos Deputados)",
+        "Órgão executor": plano["orgao_executor"],
         "Parlamentar autor da emenda": plano["nome_parlamentar_emenda_plano_acao"],
-        "Objeto": plano["nome_objeto"].fillna("(não detalhado no plano de ação)"),
         "Situação": plano["situacao_plano_acao"],
         "Ano": plano["ano_plano_acao"],
         "Valor do plano (R$)": plano["valor"],
+        "Valor pago (R$)": plano["valor_pago"],
     })
-    return saida.sort_values("Ano", ascending=False, na_position="last")
+    return saida.sort_values("Ano", ascending=False, na_position="last"), params
 
 
 # ---------------------------------------------------------------------------
@@ -148,17 +224,57 @@ def montar_especiais():
 
 def montar_fundoafundo():
     plano = carregar("df_fundoafundo_plano_acao.csv")
-    colunas = ["Nº Plano de Ação", "Ente beneficiário", "Ente concedente", "Fundo vinculado", "Situação",
-               "Início vigência", "Fim vigência", "Ano", "Valor total (R$)", "Valor repassado (R$)"]
+    dados_bancarios = carregar("df_fundoafundo_dados_bancarios.csv")
+    lancamentos = carregar("df_fundoafundo_lancamentos.csv")
+    subtransacoes = carregar("df_fundoafundo_subtransacoes.csv")
+
+    colunas = ["Nº Plano de Ação", "Ente concedente", "Ente beneficiário", "Fundo vinculado",
+               "Situação", "Início vigência", "Fim vigência", "Ano",
+               "Valor total (R$)", "Valor repassado (R$)", "Valor pago (R$)"]
+    params = {
+        "Nº Plano de Ação": "plano_acao.codigo_plano_acao",
+        "Ente concedente": "plano_acao.nome_orgao_repassador_plano_acao",
+        "Ente beneficiário": "plano_acao.nome_ente_recebedor_plano_acao",
+        "Fundo vinculado": "plano_acao.nome_fundo_vinculado_plano_acao",
+        "Situação": "plano_acao.situacao_plano_acao",
+        "Início vigência": "plano_acao.data_inicio_vigencia_plano_acao",
+        "Fim vigência": "plano_acao.data_fim_vigencia_plano_acao",
+        "Ano": "ano(data_inicio_vigencia_plano_acao)",
+        "Valor total (R$)": "plano_acao.valor_total_plano_acao",
+        "Valor repassado (R$)": "plano_acao.valor_total_repasse_plano_acao",
+        "Valor pago (R$)": "Σ subtransações.valor_subtransacao_gestao_financeira",
+    }
     if plano.empty:
-        return pd.DataFrame(columns=colunas)
+        return pd.DataFrame(columns=colunas), params
+
+    # Valor pago (cadeia de 4 tabelas - regra do setor de Transparencia):
+    # plano_acao -> dados_bancarios (id_agencia_conta) -> lancamentos
+    # (id_lancamento_gestao_financeira) -> subtransacoes -> somar valor_subtransacao
+    if not dados_bancarios.empty and not lancamentos.empty and not subtransacoes.empty:
+        sub_valor = subtransacoes.groupby("id_lancamento_gestao_financeira")["valor_subtransacao_gestao_financeira"].sum()
+        lanc = lancamentos.copy()
+        lanc["valor_pago_lanc"] = lanc["id_lancamento_gestao_financeira"].map(sub_valor).fillna(0)
+        lanc_por_conta = lanc.groupby("id_agencia_conta")["valor_pago_lanc"].sum()
+        origem_por_conta = lanc.groupby("id_agencia_conta")["descricao_origem_solicitacao_gestao_financeira"].agg(
+            lambda s: s.dropna().iloc[0] if s.dropna().size else ""
+        )
+        db = dados_bancarios.copy()
+        db["valor_pago_conta"] = db["id_agencia_conta"].map(lanc_por_conta).fillna(0)
+        db["origem_conta"] = db["id_agencia_conta"].map(origem_por_conta).fillna("")
+        valor_pago_por_plano = db.groupby("id_plano_acao")["valor_pago_conta"].sum()
+        origem_por_plano = db.groupby("id_plano_acao")["origem_conta"].agg(lambda s: s[s != ""].iloc[0] if (s != "").any() else "")
+    else:
+        valor_pago_por_plano = pd.Series(dtype=float)
+        origem_por_plano = pd.Series(dtype=str)
 
     plano = plano[eh_gdf(plano["cnpj_ente_recebedor_plano_acao"])].copy()
+    plano["valor_pago"] = plano["id_plano_acao"].map(valor_pago_por_plano).fillna(0)
+    plano["origem"] = plano["id_plano_acao"].map(origem_por_plano).fillna("")
 
     saida = pd.DataFrame({
         "Nº Plano de Ação": plano["codigo_plano_acao"],
-        "Ente beneficiário": plano["nome_ente_recebedor_plano_acao"],
         "Ente concedente": plano["nome_orgao_repassador_plano_acao"],
+        "Ente beneficiário": plano["nome_ente_recebedor_plano_acao"],
         "Fundo vinculado": plano["nome_fundo_vinculado_plano_acao"],
         "Situação": plano["situacao_plano_acao"],
         "Início vigência": fmt_data(plano["data_inicio_vigencia_plano_acao"]),
@@ -166,8 +282,9 @@ def montar_fundoafundo():
         "Ano": extrair_ano(plano["data_inicio_vigencia_plano_acao"]),
         "Valor total (R$)": num(plano.get("valor_total_plano_acao")),
         "Valor repassado (R$)": num(plano.get("valor_total_repasse_plano_acao")),
+        "Valor pago (R$)": plano["valor_pago"],
     })
-    return saida.sort_values("Ano", ascending=False, na_position="last")
+    return saida.sort_values("Ano", ascending=False, na_position="last"), params
 
 
 # ---------------------------------------------------------------------------
@@ -177,17 +294,37 @@ def montar_fundoafundo():
 def montar_siconv():
     convenio = carregar("df_siconv_convenio.csv", dtype={"NR_CONVENIO": str})
     proposta = carregar("df_siconv_proposta.csv")
+    emenda = carregar("df_siconv_emenda.csv")
+
+    # Uma proposta pode ter mais de uma emenda vinculada - agregamos numero(s)
+    # e parlamentar(es) em uma unica celula, separados por " | ".
+    if not emenda.empty:
+        emenda_agg = emenda.groupby("ID_PROPOSTA").agg({
+            "NR_EMENDA": lambda s: " | ".join(sorted(set(s.dropna().astype(str)))),
+            "NOME_PARLAMENTAR": lambda s: " | ".join(sorted(set(s.dropna().astype(str)))),
+            "TIPO_PARLAMENTAR": lambda s: " | ".join(sorted(set(s.dropna().astype(str)))),
+        }).reset_index()
+    else:
+        emenda_agg = pd.DataFrame(columns=["ID_PROPOSTA", "NR_EMENDA", "NOME_PARLAMENTAR", "TIPO_PARLAMENTAR"])
 
     df = convenio.merge(
-        proposta[["ID_PROPOSTA", "DESC_ORGAO_SUP", "NM_PROPONENTE", "MUNIC_PROPONENTE", "IDENTIF_PROPONENTE"]],
+        proposta[["ID_PROPOSTA", "DESC_ORGAO_SUP", "NM_PROPONENTE", "MUNIC_PROPONENTE", "IDENTIF_PROPONENTE", "MODALIDADE"]],
         on="ID_PROPOSTA", how="left",
     )
+    df = df.merge(emenda_agg, on="ID_PROPOSTA", how="left")
     df = df[eh_gdf(df["IDENTIF_PROPONENTE"])].copy()
+
+    # Regra de negocio (decisao da usuaria): excluir Termo de Fomento - recursos
+    # da Uniao a OSCs, sem transitar pelo GDF. Na pratica ja fica 100% excluido
+    # pelo filtro de CNPJ do proponente (Termo de Fomento e sempre com OSC), mas
+    # o filtro explicito fica aqui como garantia caso a base mude no futuro.
+    df = df[~df["MODALIDADE"].astype(str).str.upper().eq("TERMO DE FOMENTO")].copy()
 
     saida = pd.DataFrame({
         "Nº Convênio": df["NR_CONVENIO"],
-        "Ente beneficiário": df["NM_PROPONENTE"],
         "Ente concedente": df["DESC_ORGAO_SUP"],
+        "Ente beneficiário": df["NM_PROPONENTE"],
+        "Modalidade": df["MODALIDADE"],
         "Situação": df["SIT_CONVENIO"],
         "Data de celebração": fmt_data(df["DIA_ASSIN_CONV"]),
         "Início vigência": fmt_data(df["DIA_INIC_VIGENC_CONV"]),
@@ -196,10 +333,28 @@ def montar_siconv():
         "Valor global (R$)": num(df.get("VL_GLOBAL_CONV")),
         "Valor repasse (R$)": num(df.get("VL_REPASSE_CONV")),
         "Valor empenhado (R$)": num(df.get("VL_EMPENHADO_CONV")),
-        "Valor desembolsado (R$)": num(df.get("VL_DESEMBOLSADO_CONV")),
-        "UG emitente": df["UG_EMITENTE"],
+        "Valor pago (R$)": num(df.get("VL_DESEMBOLSADO_CONV")),
+        "Nº Emenda Parlamentar": df["NR_EMENDA"].fillna(""),
+        "Parlamentar autor da emenda": df["NOME_PARLAMENTAR"].fillna(""),
     })
-    return saida.sort_values("Ano", ascending=False, na_position="last")
+    params = {
+        "Nº Convênio": "convenio.NR_CONVENIO",
+        "Ente concedente": "proposta.DESC_ORGAO_SUP",
+        "Ente beneficiário": "proposta.NM_PROPONENTE",
+        "Modalidade": "proposta.MODALIDADE",
+        "Situação": "convenio.SIT_CONVENIO",
+        "Data de celebração": "convenio.DIA_ASSIN_CONV",
+        "Início vigência": "convenio.DIA_INIC_VIGENC_CONV",
+        "Fim vigência": "convenio.DIA_FIM_VIGENC_CONV",
+        "Ano": "convenio.ANO",
+        "Valor global (R$)": "convenio.VL_GLOBAL_CONV",
+        "Valor repasse (R$)": "convenio.VL_REPASSE_CONV",
+        "Valor empenhado (R$)": "convenio.VL_EMPENHADO_CONV",
+        "Valor pago (R$)": "convenio.VL_DESEMBOLSADO_CONV",
+        "Nº Emenda Parlamentar": "emenda.NR_EMENDA",
+        "Parlamentar autor da emenda": "emenda.NOME_PARLAMENTAR",
+    }
+    return saida.sort_values("Ano", ascending=False, na_position="last"), params
 
 
 # ---------------------------------------------------------------------------
@@ -209,16 +364,16 @@ def montar_siconv():
 ABAS = [
     {"id": "parcerias", "titulo": "Gestão de Parcerias", "icone": "🤝",
      "fonte": "API /parcerias — endpoints /proposta + /parceria + /documento-habil + /ordem-pagamento",
-     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor global (R$)"},
+     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor repassado (R$)"},
     {"id": "especiais", "titulo": "Transferências Especiais", "icone": "🏛️",
-     "fonte": "API /especiais — endpoints /beneficiarios-especiais + /planos-acao-especiais",
-     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor do plano (R$)"},
+     "fonte": "API /especiais — endpoints /beneficiarios-especiais + /planos-acao-especiais + /programas-especiais + cadeia empenho→documento hábil→ordem de pagamento",
+     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
     {"id": "fundoafundo", "titulo": "Fundo a Fundo", "icone": "💰",
-     "fonte": "API /fundoafundo — endpoint /planos-acao",
-     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor total (R$)"},
+     "fonte": "API /fundoafundo — endpoint /planos-acao + cadeia dados bancários→lançamentos→subtransações",
+     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
     {"id": "siconv", "titulo": "SICONV Legado", "icone": "📄",
-     "fonte": "Download CSV — siconv_convenio.csv + siconv_proposta.csv",
-     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor global (R$)"},
+     "fonte": "Download CSV — siconv_convenio.csv + siconv_proposta.csv + siconv_emenda.csv",
+     "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
 ]
 
 
@@ -230,38 +385,23 @@ def fmt_valor(v):
     return f"{v:,.2f}".replace(",", "§").replace(".", ",").replace("§", ".")
 
 
-def montar_krow(df: pd.DataFrame, coluna_valor: str) -> str:
-    total_valor = pd.to_numeric(df[coluna_valor], errors="coerce").sum() if coluna_valor in df.columns and not df.empty else 0
-    qtd_entes = df["Ente beneficiário"].nunique() if "Ente beneficiário" in df.columns else 0
-    qtd_situacoes = df["Situação"].nunique() if "Situação" in df.columns else 0
-    return f"""
-    <div class="krow">
-      <div class="kpi">
-        <div class="kl">Total de registros (GDF)</div>
-        <div class="kv">{len(df)}</div>
-      </div>
-      <div class="kpi ko">
-        <div class="kl">{coluna_valor}</div>
-        <div class="kv">R$ {fmt_valor(total_valor)}</div>
-      </div>
-      <div class="kpi kw">
-        <div class="kl">Entes/órgãos distintos</div>
-        <div class="kv">{qtd_entes}</div>
-      </div>
-      <div class="kpi ka">
-        <div class="kl">Situações distintas</div>
-        <div class="kv">{qtd_situacoes}</div>
-      </div>
-    </div>
-    """
-
-
 def montar_filtros(df: pd.DataFrame, aba_id: str) -> str:
     anos = sorted([int(a) for a in df["Ano"].dropna().unique()], reverse=True) if "Ano" in df.columns else []
     situacoes = sorted([s for s in df["Situação"].dropna().unique()]) if "Situação" in df.columns else []
+    modalidades = sorted([m for m in df["Modalidade"].dropna().unique() if m]) if "Modalidade" in df.columns else []
 
     opts_ano = "".join(f'<option value="{a}">{a}</option>' for a in anos)
     opts_sit = "".join(f'<option value="{s}">{s}</option>' for s in situacoes)
+    opts_mod = "".join(f'<option value="{m}">{m}</option>' for m in modalidades)
+
+    campo_modalidade = ""
+    if modalidades:
+        campo_modalidade = f"""
+      <div class="fg">
+        <label>Modalidade</label>
+        <select id="fm-{aba_id}" onchange="aplicarFiltros('{aba_id}')"><option value="">Todas</option>{opts_mod}</select>
+      </div>
+        """
 
     return f"""
     <div class="fbar">
@@ -277,6 +417,7 @@ def montar_filtros(df: pd.DataFrame, aba_id: str) -> str:
         <label>Situação</label>
         <select id="fs-{aba_id}" onchange="aplicarFiltros('{aba_id}')"><option value="">Todas</option>{opts_sit}</select>
       </div>
+      {campo_modalidade}
       <div class="fg">
         <label>Busca livre</label>
         <input type="text" id="fl-{aba_id}" placeholder="Qualquer campo…" oninput="aplicarFiltros('{aba_id}')">
@@ -289,7 +430,7 @@ def montar_filtros(df: pd.DataFrame, aba_id: str) -> str:
     """
 
 
-def montar_tabela_html(df: pd.DataFrame, aba_id: str) -> str:
+def montar_tabela_html(df: pd.DataFrame, aba_id: str, params: dict) -> str:
     colunas = list(df.columns)
     registros = df.fillna("").to_dict(orient="records")
     for r in registros:
@@ -297,7 +438,13 @@ def montar_tabela_html(df: pd.DataFrame, aba_id: str) -> str:
             if "Valor" in c or "valor" in c:
                 r[c] = fmt_valor(r[c]) if r[c] != "" else ""
 
-    thead = "".join(f'<th onclick="ordenar(\'{aba_id}\',{i})">{c}</th>' for i, c in enumerate(colunas))
+    def cabecalho(c, i):
+        classe = "num" if ("Valor" in c or "valor" in c) else ""
+        param = params.get(c, "")
+        sub = f'<span class="acct">{param}</span>' if param else ""
+        return f'<th class="{classe}" onclick="ordenar(\'{aba_id}\',{i})">{c}{sub}</th>'
+
+    thead = "".join(cabecalho(c, i) for i, c in enumerate(colunas))
     dados_json = json.dumps(registros, ensure_ascii=False)
 
     return f"""
@@ -309,17 +456,23 @@ def montar_tabela_html(df: pd.DataFrame, aba_id: str) -> str:
         </table>
       </div>
     </div>
-    <script>DADOS['{aba_id}'] = {dados_json}; COLUNAS['{aba_id}'] = {json.dumps(colunas, ensure_ascii=False)};</script>
+    <script>
+      DADOS['{aba_id}'] = {dados_json};
+      COLUNAS['{aba_id}'] = {json.dumps(colunas, ensure_ascii=False)};
+      COLUNAS_NUM['{aba_id}'] = {json.dumps(["Valor" in c or "valor" in c for c in colunas])};
+    </script>
     """
 
 
 def main():
-    dados = {
+    resultados = {
         "parcerias": montar_parcerias(),
         "especiais": montar_especiais(),
         "fundoafundo": montar_fundoafundo(),
         "siconv": montar_siconv(),
     }
+    dados = {aid: df for aid, (df, _) in resultados.items()}
+    parametros = {aid: params for aid, (_, params) in resultados.items()}
 
     abas_html = []
     conteudo_html = []
@@ -332,14 +485,12 @@ def main():
             f'{aba["icone"]} {aba["titulo"]} <span class="badge-count">{len(df)}</span></button>'
         )
 
-        krow_html = montar_krow(df, aba["coluna_valor_kpi"])
         filtros_html = montar_filtros(df, aid)
-        tabela_html = montar_tabela_html(df, aid)
+        tabela_html = montar_tabela_html(df, aid, parametros[aid])
 
         conteudo_html.append(f"""
         <section class="aba-conteudo {'ativo' if i == 0 else ''}" id="conteudo-{aid}">
           <p class="fonte-info">Fonte: {aba['fonte']}</p>
-          {krow_html}
           {filtros_html}
           {tabela_html}
         </section>
@@ -418,9 +569,11 @@ header h1 span{{font-weight:400;color:#9ab0cc;font-size:12px;display:block;lette
 .tw{{border-radius:var(--radius);border:1px solid var(--border);overflow:auto;max-height:65vh;box-shadow:var(--shadow)}}
 table{{border-collapse:collapse;width:100%;font-size:12px}}
 thead{{position:sticky;top:0;background:var(--navy);color:#c8d8ec;z-index:5}}
-th{{padding:10px 12px;text-align:left;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.2px}}
+th{{padding:10px 12px;text-align:left;font-weight:600;white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.2px;max-width:180px}}
+.acct{{display:block;font-size:9px;font-weight:400;color:#9ab0cc;letter-spacing:.2px;margin-top:3px;white-space:normal;overflow-wrap:anywhere;text-transform:none;max-width:160px}}
 th:hover{{background:var(--navy-light)}}
-td{{padding:7px 12px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:340px;overflow:hidden;text-overflow:ellipsis;font-size:12px}}
+td{{padding:7px 12px;border-bottom:1px solid var(--border);white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis;font-size:12px}}
+th.num,td.num{{text-align:right;font-variant-numeric:tabular-nums}}
 tbody tr:nth-child(even){{background:var(--row-alt)}}
 tbody tr:hover td{{background:var(--hover)}}
 
@@ -432,7 +585,7 @@ tbody tr:hover td{{background:var(--hover)}}
 <header>
   <div style="display:flex;align-items:center">
     <div class="hlogo">🏛️</div>
-    <h1>TRANSFEREGOV × GDF<span>Visão consolidada — somente órgãos/entidades do Distrito Federal</span></h1>
+    <h1>TRANSFEREGOV<span>Visão consolidada — somente órgãos/entidades do Distrito Federal</span></h1>
   </div>
   <span id="ts">Gerado em {data_geracao}</span>
 </header>
@@ -444,6 +597,7 @@ tbody tr:hover td{{background:var(--hover)}}
 <script>
 window.DADOS = {{}};
 window.COLUNAS = {{}};
+window.COLUNAS_NUM = {{}};
 window.ORDEM = {{}};
 </script>
 
@@ -453,13 +607,21 @@ window.ORDEM = {{}};
   <strong>Escopo:</strong> este painel mostra <strong>somente</strong> registros cujo CNPJ do ente beneficiário/proponente
   bate com a lista de órgãos e entidades do GDF (extraída de <code>MIL2026.UNIDADEGESTORA</code>, campo <code>NUCGC</code>,
   mais o CNPJ do ente federativo Distrito Federal 00.394.601/0001-26). Organizações privadas (associações, cooperativas,
-  empresas) apenas sediadas em Brasília foram excluídas. Fonte dos dados: <code>https://api-publica.transferegov.gestao.gov.br/</code>.
-  Extração bruta para análise exploratória; ainda não cruzada com o SIGGO.
+  empresas) apenas sediadas em Brasília foram excluídas por esse filtro. Essa regra continua necessária mesmo após adotar
+  os critérios do setor de Transparência/Governo Aberto do DF: testamos e, no SICONV, sem o filtro de CNPJ restariam 5.443
+  propostas com UF=DF (só excluindo Termo de Fomento), das quais apenas 1.711 são de fato do GDF — as outras ~3.700 são de
+  terceiros privados sediados em Brasília. Traz <strong>todos os recursos, com ou sem emenda parlamentar</strong> (diferente
+  da consulta pública de Emendas Parlamentares Federais do Portal da Transparência DF, que filtra só o que tem emenda).
+  Registros de <strong>Termo de Fomento</strong> são excluídos explicitamente no SICONV (via campo Modalidade), embora o
+  filtro de CNPJ já os elimine na prática (é um instrumento exclusivo com OSCs). Campo <strong>Valor pago</strong> segue as
+  regras de cálculo usadas pelo setor de Transparência/Governo Aberto do DF (cadeia de tabelas por fonte). Fonte dos dados:
+  <code>https://api-publica.transferegov.gestao.gov.br/</code>. Extração bruta para análise exploratória; ainda não cruzada com o SIGGO.
 </div>
 
 <script>
 const DADOS = window.DADOS;
 const COLUNAS = window.COLUNAS;
+const COLUNAS_NUM = window.COLUNAS_NUM;
 const ORDEM = window.ORDEM;
 
 function mostrarAba(id) {{
@@ -473,8 +635,9 @@ function mostrarAba(id) {{
 function renderizar(id, linhas) {{
   const tbody = document.querySelector(`#tabela-${{id}} tbody`);
   const cols = COLUNAS[id];
+  const numCols = COLUNAS_NUM[id] || [];
   tbody.innerHTML = linhas.map(row =>
-    '<tr>' + cols.map(c => `<td title="${{String(row[c]).replace(/"/g,'&quot;')}}">${{row[c]}}</td>`).join('') + '</tr>'
+    '<tr>' + cols.map((c, i) => `<td class="${{numCols[i] ? 'num' : ''}}" title="${{String(row[c]).replace(/"/g,'&quot;')}}">${{row[c]}}</td>`).join('') + '</tr>'
   ).join('');
   document.getElementById('contador-' + id).textContent = linhas.length + ' registros';
 }}
@@ -483,12 +646,15 @@ function aplicarFiltros(id) {{
   const ente = (document.getElementById('fe-' + id).value || '').toLowerCase();
   const ano = document.getElementById('fa-' + id).value;
   const sit = document.getElementById('fs-' + id).value;
+  const elMod = document.getElementById('fm-' + id);
+  const mod = elMod ? elMod.value : '';
   const livre = (document.getElementById('fl-' + id).value || '').toLowerCase();
 
   const linhas = DADOS[id].filter(row => {{
     if (ente && !String(row['Ente beneficiário'] || '').toLowerCase().includes(ente)) return false;
     if (ano && String(row['Ano']) !== ano) return false;
     if (sit && row['Situação'] !== sit) return false;
+    if (mod && row['Modalidade'] !== mod) return false;
     if (livre && !Object.values(row).some(v => String(v).toLowerCase().includes(livre))) return false;
     return true;
   }});
@@ -499,6 +665,8 @@ function limparFiltros(id) {{
   document.getElementById('fe-' + id).value = '';
   document.getElementById('fa-' + id).value = '';
   document.getElementById('fs-' + id).value = '';
+  const elMod = document.getElementById('fm-' + id);
+  if (elMod) elMod.value = '';
   document.getElementById('fl-' + id).value = '';
   renderizar(id, DADOS[id]);
 }}
