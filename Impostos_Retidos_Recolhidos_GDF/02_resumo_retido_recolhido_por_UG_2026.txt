@@ -8,13 +8,11 @@
 --   Contas "PAGAS/RECOLHIDO" (827110204, 631820000, 632210300): valor
 --     recolhido = soma dos DEBITOS nessas contas.
 --
--- TRAVA DE ANO: nas contas 827110203/827110204 o COCONTACORRENTE guarda
--- a Nota de Empenho no formato AAAANEXXXXX (ex: 2026NE00001). Para
--- garantir que so entrem NEs do proprio exercicio de 2026, filtramos
--- explicitamente SUBSTR(COCONTACORRENTE,1,4) = '2026' nelas.
+-- INCLUI EVENTOS DE ESTORNO (ver observacao no script 01).
+-- TRAVA DE ANO nas contas 827110203/827110204 (ver observacao no script 01).
 -- =====================================================================
 
-WITH EVENTOS_IMPOSTO AS (
+WITH EVENTOS_TEXTO_2026 AS (
     SELECT DISTINCT er.COCONTACONTABIL, er.COEVENTO, e.NOEVENTO, e.TXDESCRICAO
     FROM MIL2026.EVENTOROTEIRO er
     JOIN MIL2026.EVENTO e ON e.COEVENTO = er.COEVENTO
@@ -34,6 +32,27 @@ WITH EVENTOS_IMPOSTO AS (
       )
       AND UPPER(e.NOEVENTO) NOT LIKE '%INSS%'
       AND UPPER(e.TXDESCRICAO) NOT LIKE '%INSS%'
+),
+EVENTOS_PARES_2026 AS (
+    -- Inclui o evento PAR (principal <-> estorno) de cada evento de imposto ja identificado,
+    -- mesmo que a descricao do par nao contenha as mesmas palavras-chave.
+    -- Convencao SIGGO: 3o digito do codigo do evento: 0<->5 e 1<->6 sao pares principal/estorno.
+    SELECT DISTINCT er2.COCONTACONTABIL, er2.COEVENTO, e2.NOEVENTO, e2.TXDESCRICAO
+    FROM EVENTOS_TEXTO_2026 et
+    JOIN MIL2026.EVENTOROTEIRO er2
+      ON er2.COCONTACONTABIL = et.COCONTACONTABIL
+     AND er2.COEVENTO = CASE SUBSTR(TO_CHAR(et.COEVENTO), 3, 1)
+                              WHEN '0' THEN TO_NUMBER(SUBSTR(TO_CHAR(et.COEVENTO),1,2) || '5' || SUBSTR(TO_CHAR(et.COEVENTO),4))
+                              WHEN '5' THEN TO_NUMBER(SUBSTR(TO_CHAR(et.COEVENTO),1,2) || '0' || SUBSTR(TO_CHAR(et.COEVENTO),4))
+                              WHEN '1' THEN TO_NUMBER(SUBSTR(TO_CHAR(et.COEVENTO),1,2) || '6' || SUBSTR(TO_CHAR(et.COEVENTO),4))
+                              WHEN '6' THEN TO_NUMBER(SUBSTR(TO_CHAR(et.COEVENTO),1,2) || '1' || SUBSTR(TO_CHAR(et.COEVENTO),4))
+                            END
+    JOIN MIL2026.EVENTO e2 ON e2.COEVENTO = er2.COEVENTO
+),
+EVENTOS_IMPOSTO_2026 AS (
+    SELECT COCONTACONTABIL, COEVENTO, NOEVENTO, TXDESCRICAO FROM EVENTOS_TEXTO_2026
+    UNION
+    SELECT COCONTACONTABIL, COEVENTO, NOEVENTO, TXDESCRICAO FROM EVENTOS_PARES_2026
 ),
 BASE AS (
     SELECT
@@ -58,7 +77,7 @@ BASE AS (
             ELSE 'OUTROS IMPOSTOS'
         END AS TIPO_IMPOSTO
     FROM MIL2026.LANCAMENTOCONTABIL l
-    JOIN EVENTOS_IMPOSTO ei ON ei.COEVENTO = l.COEVENTO AND ei.COCONTACONTABIL = l.COCONTACONTABIL
+    JOIN EVENTOS_IMPOSTO_2026 ei ON ei.COEVENTO = l.COEVENTO AND ei.COCONTACONTABIL = l.COCONTACONTABIL
     LEFT JOIN MIL2026.UNIDADEGESTORA ug ON ug.COUG = l.COUG
     WHERE l.COCONTACONTABIL NOT IN (827110203, 827110204)
        OR SUBSTR(TRIM(l.COCONTACORRENTE), 1, 4) = '2026'
