@@ -141,6 +141,16 @@ def extrair_especiais():
     salvar(pd.DataFrame(documentos), "df_especiais_documento_habil.csv")
     salvar(pd.DataFrame(pagamentos), "df_especiais_ordem_pagamento.csv")
 
+    # /programas-especiais traz documentos_origem_programa, usado para excluir
+    # registros de "Termo de Fomento" (conforme regra de negocio do setor de
+    # Transparencia - recursos repassados direto a OSCs, sem transitar pelo GDF).
+    df_planos = pd.DataFrame(planos)
+    ids_programa = df_planos["id_programa"].dropna().unique() if not df_planos.empty and "id_programa" in df_planos.columns else []
+    programas = []
+    for id_programa in ids_programa:
+        programas.extend(buscar_por_id(base, "programas-especiais", "id_programa", id_programa))
+    salvar(pd.DataFrame(programas), "df_especiais_programa.csv")
+
 
 # ---------------------------------------------------------------------------
 # 3) API Transferencias Fundo a Fundo
@@ -168,10 +178,38 @@ def extrair_fundoafundo():
         df_planos = df_planos.drop_duplicates(subset="id_plano_acao")
     salvar(df_planos, "df_fundoafundo_plano_acao.csv")
 
-    # /empenhos e /gestao-financeira-lancamentos nao tem filtro direto por UF
-    # ou por id_plano_acao na documentacao publica - registrado como limitacao.
-    print("   nota: /empenhos e /gestao-financeira-lancamentos do modulo Fundo a Fundo")
-    print("   nao tem filtro por UF nem por id_plano_acao - nao extraidos aqui.")
+    # Cadeia de 4 tabelas para "Valor Pago" (regra de negocio do setor de
+    # Transparencia - documento User Story Consulta Transferencias Federais):
+    #   plano_acao -> planos-acao-dados-bancarios (id_plano_acao) -> id_agencia_conta
+    #   -> gestao-financeira-lancamentos (id_agencia_conta) -> id_lancamento_gestao_financeira
+    #      (+ descricao_origem_solicitacao_gestao_financeira, usado p/ excluir Termo de Fomento)
+    #   -> gestao-financeira-subtransacoes (id_lancamento_gestao_financeira)
+    #      -> somar valor_subtransacao_gestao_financeira
+    ids_plano = df_planos["id_plano_acao"].dropna().unique() if not df_planos.empty else []
+    dados_bancarios, lancamentos, subtransacoes = [], [], []
+
+    for i, id_plano in enumerate(ids_plano, start=1):
+        contas = buscar_por_id(base, "planos-acao-dados-bancarios", "id_plano_acao", id_plano)
+        dados_bancarios.extend(contas)
+        for conta in contas:
+            id_agencia_conta = conta.get("id_agencia_conta")
+            if not id_agencia_conta:
+                continue
+            lancs = buscar_por_id(base, "gestao-financeira-lancamentos", "id_agencia_conta", id_agencia_conta)
+            lancamentos.extend(lancs)
+            for lanc in lancs:
+                id_lanc = lanc.get("id_lancamento_gestao_financeira")
+                if id_lanc:
+                    subtransacoes.extend(
+                        buscar_por_id(base, "gestao-financeira-subtransacoes", "id_lancamento_gestao_financeira", id_lanc)
+                    )
+        if i % 20 == 0:
+            print(f"   dados bancarios/financeiros: {i}/{len(ids_plano)} planos processados...")
+        time.sleep(0.1)
+
+    salvar(pd.DataFrame(dados_bancarios), "df_fundoafundo_dados_bancarios.csv")
+    salvar(pd.DataFrame(lancamentos), "df_fundoafundo_lancamentos.csv")
+    salvar(pd.DataFrame(subtransacoes), "df_fundoafundo_subtransacoes.csv")
 
 
 # ---------------------------------------------------------------------------
@@ -212,6 +250,11 @@ def extrair_siconv_legado():
     df_pagamento = baixar_csv_siconv("siconv_pagamento", dtype={"NR_CONVENIO": str})
     df_pagamento_df = df_pagamento[df_pagamento["NR_CONVENIO"].astype(str).str.strip().isin(nrs_convenio_df)].copy()
     salvar(df_pagamento_df, "df_siconv_pagamento.csv")
+
+    print("   baixando siconv_emenda...")
+    df_emenda = baixar_csv_siconv("siconv_emenda")
+    df_emenda_df = df_emenda[df_emenda["ID_PROPOSTA"].isin(ids_proposta_df)].copy()
+    salvar(df_emenda_df, "df_siconv_emenda.csv")
 
 
 # ---------------------------------------------------------------------------
