@@ -2,11 +2,46 @@
 -- RESUMO: VALOR RETIDO x VALOR RECOLHIDO POR UG E TIPO DE IMPOSTO
 -- Exercicio 2026 (schema MIL2026)
 --
--- Regra de classificacao:
---   Contas "A PAGAR/RETIDO" (827110203, 631810000, 632110300): valor
---     retido = soma dos CREDITOS nessas contas.
---   Contas "PAGAS/RECOLHIDO" (827110204, 631820000, 632210300): valor
---     recolhido = soma dos DEBITOS nessas contas.
+-- Regra de classificacao (CORRIGIDA em 14/09/2026, 3a revisao - Opcao A aprovada):
+--
+--   VALOR_RETIDO = CREDITO nas contas 631810000/632110300/827110203
+--                - DEBITO nessas mesmas contas, APENAS quando o EVENTO que
+--                  gerou o debito e, ele mesmo, um evento de RETENCAO/
+--                  APROPRIACAO (contem 'RETEN' ou 'APROPRIA' no nome E NAO
+--                  contem 'PAGAMENTO'/'RECOLHIMENTO') E o nome do evento NAO
+--                  faz referencia a exercicio anterior ('EX ANT' ou
+--                  'EXERCICIO(S) ANTERIOR(ES)'). Ou seja: so desconta
+--                  cancelamentos/estornos de retencao DO PROPRIO EXERCICIO,
+--                  nunca pagamentos nem cancelamentos de retencao registrada
+--                  em ano diferente do consultado.
+--
+--   MOTIVO DA EXCLUSAO "EX ANT" (Opcao A da Proposta de 14/09/2026): eventos
+--   como "CANC. RPP - RETENCOES EX ANT..." cancelam retencao cujo CREDITO
+--   original foi registrado em exercicio ANTERIOR ao do cancelamento. Como a
+--   consulta e feita exercicio a exercicio, subtrair esse debito do credito
+--   do ano do cancelamento gera saldo negativo sem contrapartida (caso medido:
+--   evento 540043, R$18.485,15 em toda a serie 2012-2026, 0,00% do total
+--   subtraido - decisao tomada com esse impacto medido e conhecido).
+--
+--   VALOR_RECOLHIDO = CREDITO nas contas 631820000/632210300/827110204
+--                    - DEBITO nessas mesmas contas, APENAS quando o evento
+--                      e um evento de PAGAMENTO/RECOLHIMENTO (contem
+--                      'PAGAMENTO' ou 'RECOLHIMENTO' no nome). So desconta
+--                      estornos de pagamento.
+--
+--   POR QUE NAO "CREDITO - TODO DEBITO" (1a tentativa, abandonada):
+--   a conta 632110300 (RP PROCESSADOS RETENCOES A PAGAR) e debitada em
+--   grande volume por eventos como "PAGAMENTO RPP IRPF - RECEITA GDF" e
+--   "PAGAMENTO DE OUTRAS CONSIGNACOES EXERCICIOS ANTERIORES" - isso e o
+--   PAGAMENTO, em 2026, de retencoes registradas (creditadas) em EXERCICIOS
+--   ANTERIORES. Descontar esse debito do credito de 2026 mistura anos
+--   diferentes e gera total negativo sem sentido. So um DEBITO cujo evento
+--   e, ele mesmo, nomeado como retencao/apropriacao (ou seu cancelamento)
+--   representa de fato uma retencao que nao deveria ter acontecido - e so
+--   esse tipo de debito deve ser descontado (ex: ICMS/SEDET 2026, evento
+--   520259 credito R$1.385,87 em 27/01, estornado pelo evento 525259
+--   debito R$1.385,87 em 05/02 - ambos nomeados "RETENCAO ICMS FONTES
+--   VINCULADAS" - saldo liquido correto = R$0,00).
 --
 -- INCLUI EVENTOS DE ESTORNO (ver observacao no script 01).
 -- TRAVA DE ANO nas contas 827110203/827110204 (ver observacao no script 01).
@@ -87,8 +122,17 @@ SELECT
     NOUG,
     TIPO_IMPOSTO,
     SUM(CASE WHEN COCONTACONTABIL IN ('631810000','632110300','827110203') AND INDEBITOCREDITO = 'C'
+             THEN VALANCAMENTO ELSE 0 END)
+  - SUM(CASE WHEN COCONTACONTABIL IN ('631810000','632110300','827110203') AND INDEBITOCREDITO = 'D'
+             AND (UPPER(NOEVENTO) LIKE '%RETEN%' OR UPPER(NOEVENTO) LIKE '%APROPRIA%')
+             AND UPPER(NOEVENTO) NOT LIKE '%PAGAMENTO%' AND UPPER(NOEVENTO) NOT LIKE '%RECOLHIMENTO%'
+             AND UPPER(NOEVENTO) NOT LIKE '%EX ANT%'
+             AND NOT (UPPER(NOEVENTO) LIKE '%EXERC%' AND UPPER(NOEVENTO) LIKE '%ANTERIOR%')
              THEN VALANCAMENTO ELSE 0 END) AS VALOR_RETIDO,
-    SUM(CASE WHEN COCONTACONTABIL IN ('631820000','632210300','827110204') AND INDEBITOCREDITO = 'D'
+    SUM(CASE WHEN COCONTACONTABIL IN ('631820000','632210300','827110204') AND INDEBITOCREDITO = 'C'
+             THEN VALANCAMENTO ELSE 0 END)
+  - SUM(CASE WHEN COCONTACONTABIL IN ('631820000','632210300','827110204') AND INDEBITOCREDITO = 'D'
+             AND (UPPER(NOEVENTO) LIKE '%PAGAMENTO%' OR UPPER(NOEVENTO) LIKE '%RECOLHIMENTO%')
              THEN VALANCAMENTO ELSE 0 END) AS VALOR_RECOLHIDO
 FROM BASE
 GROUP BY COUG, NOUG, TIPO_IMPOSTO
