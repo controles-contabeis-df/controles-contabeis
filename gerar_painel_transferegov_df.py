@@ -53,6 +53,18 @@ def eh_gdf(serie_cnpj: pd.Series) -> pd.Series:
     return normalizar_cnpj(serie_cnpj).isin(CNPJS_GDF)
 
 
+def eh_gdf_qualquer_formato(serie, ugs_df: set) -> pd.Series:
+    """
+    Em MIL2026.TRANSFERENCIA, tanto COCONCENTE quanto COBENEFICIADO podem vir
+    em dois formatos: CNPJ puro (14 digitos) OU codigo "UG-sequencial" (ex:
+    "210101-00001"). Reconhece o GDF nos dois formatos.
+    """
+    serie_str = serie.astype(str).str.strip()
+    cnpj_norm = normalizar_cnpj(serie)
+    prefixo_ug = serie_str.str.split("-").str[0]
+    return cnpj_norm.isin(CNPJS_GDF) | prefixo_ug.isin(ugs_df)
+
+
 def _parse_data(serie):
     """
     Converte a serie para datetime tentando primeiro o formato ISO (usado pelas
@@ -159,9 +171,11 @@ def montar_especiais():
     doc_habil = carregar("df_especiais_documento_habil.csv")
     ordem_pag = carregar("df_especiais_ordem_pagamento.csv")
     executor = carregar("df_especiais_executor.csv")
+    plano_trabalho = carregar("df_especiais_plano_trabalho.csv")
 
     colunas = ["Nº Plano de Ação", "Nº Emenda Parlamentar", "Ente beneficiário", "Órgão executor",
-               "Parlamentar autor da emenda", "Situação", "Ano", "Valor do plano (R$)", "Valor pago (R$)"]
+               "Parlamentar autor da emenda", "Situação", "Início execução", "Fim execução",
+               "Ano", "Valor global (R$)", "Valor pago (R$)"]
     params = {
         "Nº Plano de Ação": "plano_acao.codigo_plano_acao",
         "Nº Emenda Parlamentar": "plano_acao.numero_emenda_parlamentar_plano_acao",
@@ -169,8 +183,10 @@ def montar_especiais():
         "Órgão executor": "executor.nome_executor",
         "Parlamentar autor da emenda": "plano_acao.nome_parlamentar_emenda_plano_acao",
         "Situação": "plano_acao.situacao_plano_acao",
+        "Início execução": "plano_trabalho.data_inicio_execucao_plano_trabalho",
+        "Fim execução": "plano_trabalho.data_fim_execucao_plano_trabalho",
         "Ano": "plano_acao.ano_plano_acao",
-        "Valor do plano (R$)": "valor_custeio_plano_acao + valor_investimento_plano_acao",
+        "Valor global (R$)": "valor_custeio_plano_acao + valor_investimento_plano_acao",
         "Valor pago (R$)": "Σ documento-habil.valor_dh (c/ ordem-pagamento ENVIADA·PAGO)",
     }
     if plano.empty:
@@ -185,6 +201,15 @@ def montar_especiais():
         executor_por_plano = executor.drop_duplicates(subset="id_plano_acao").set_index("id_plano_acao")["nome_executor"]
     else:
         executor_por_plano = pd.Series(dtype=str)
+
+    if not plano_trabalho.empty:
+        pt = plano_trabalho.sort_values("id_plano_trabalho").drop_duplicates(subset="id_plano_acao", keep="last")
+        pt = pt.set_index("id_plano_acao")
+        inicio_por_plano = pt["data_inicio_execucao_plano_trabalho"]
+        fim_por_plano = pt["data_fim_execucao_plano_trabalho"]
+    else:
+        inicio_por_plano = pd.Series(dtype=str)
+        fim_por_plano = pd.Series(dtype=str)
 
     # Valor pago (regra do setor de Transparencia): somar valor_dh dos documentos
     # habeis cuja ordem de pagamento tenha situacao contendo ENVIADA ou PAGO,
@@ -203,6 +228,8 @@ def montar_especiais():
     plano["valor"] = num(plano.get("valor_custeio_plano_acao")) + num(plano.get("valor_investimento_plano_acao"))
     plano["valor_pago"] = plano["id_plano_acao"].map(valor_pago_por_plano).fillna(0)
     plano["orgao_executor"] = plano["id_plano_acao"].map(executor_por_plano).fillna("")
+    plano["inicio_execucao"] = plano["id_plano_acao"].map(inicio_por_plano)
+    plano["fim_execucao"] = plano["id_plano_acao"].map(fim_por_plano)
 
     saida = pd.DataFrame({
         "Nº Plano de Ação": plano["codigo_plano_acao"],
@@ -211,8 +238,10 @@ def montar_especiais():
         "Órgão executor": plano["orgao_executor"],
         "Parlamentar autor da emenda": plano["nome_parlamentar_emenda_plano_acao"],
         "Situação": plano["situacao_plano_acao"],
+        "Início execução": fmt_data(plano["inicio_execucao"]),
+        "Fim execução": fmt_data(plano["fim_execucao"]),
         "Ano": plano["ano_plano_acao"],
-        "Valor do plano (R$)": plano["valor"],
+        "Valor global (R$)": plano["valor"],
         "Valor pago (R$)": plano["valor_pago"],
     })
     return saida.sort_values("Ano", ascending=False, na_position="last"), params
@@ -230,7 +259,7 @@ def montar_fundoafundo():
 
     colunas = ["Nº Plano de Ação", "Ente concedente", "Ente beneficiário", "Fundo vinculado",
                "Situação", "Início vigência", "Fim vigência", "Ano",
-               "Valor total (R$)", "Valor repassado (R$)", "Valor pago (R$)"]
+               "Valor global (R$)", "Valor repassado (R$)", "Valor pago (R$)"]
     params = {
         "Nº Plano de Ação": "plano_acao.codigo_plano_acao",
         "Ente concedente": "plano_acao.nome_orgao_repassador_plano_acao",
@@ -240,7 +269,7 @@ def montar_fundoafundo():
         "Início vigência": "plano_acao.data_inicio_vigencia_plano_acao",
         "Fim vigência": "plano_acao.data_fim_vigencia_plano_acao",
         "Ano": "ano(data_inicio_vigencia_plano_acao)",
-        "Valor total (R$)": "plano_acao.valor_total_plano_acao",
+        "Valor global (R$)": "plano_acao.valor_total_plano_acao",
         "Valor repassado (R$)": "plano_acao.valor_total_repasse_plano_acao",
         "Valor pago (R$)": "Σ subtransações.valor_subtransacao_gestao_financeira",
     }
@@ -280,7 +309,7 @@ def montar_fundoafundo():
         "Início vigência": fmt_data(plano["data_inicio_vigencia_plano_acao"]),
         "Fim vigência": fmt_data(plano["data_fim_vigencia_plano_acao"]),
         "Ano": extrair_ano(plano["data_inicio_vigencia_plano_acao"]),
-        "Valor total (R$)": num(plano.get("valor_total_plano_acao")),
+        "Valor global (R$)": num(plano.get("valor_total_plano_acao")),
         "Valor repassado (R$)": num(plano.get("valor_total_repasse_plano_acao")),
         "Valor pago (R$)": plano["valor_pago"],
     })
@@ -358,6 +387,215 @@ def montar_siconv():
 
 
 # ---------------------------------------------------------------------------
+# 5) SIGGO — tabela MIL2026.TRANSFERENCIA (para cruzamento futuro)
+# ---------------------------------------------------------------------------
+
+# Tabela de dominio oficial "Especie de Transferencia" do SIGGO (fornecida
+# pela usuaria via tela do sistema em 2026-09-16 - nao existe tabela de
+# lookup consultavel via SQL no schema MIL2026).
+ESPECIE_LABELS = {
+    1: "Convênio", 2: "Acordo", 3: "Ajuste", 4: "Auxílio", 5: "Subvenção",
+    6: "Contribuição", 7: "Termo de Outorga e Aceitação", 8: "Termo de Fomento",
+    9: "Termo de Colaboração", 10: "Transferência Especial", 11: "PDAF",
+    12: "Fundo a Fundo", 13: "Contrato de Repasse", 14: "Contrato de Gestão",
+    15: "Operação de Crédito",
+}
+
+
+def montar_siggo():
+    t = carregar("df_siggo_transferencia.csv")
+    colunas = ["Nº Transferência", "Espécie", "Nº SICONV/SIAFI", "Nº Original",
+               "Concedente", "Beneficiário", "UG registrante", "Objeto",
+               "Data de celebração", "Início vigência", "Fim vigência",
+               "Valor transferência (R$)", "Valor contrapartida (R$)"]
+    params = {
+        "Nº Transferência": "TRANSFERENCIA.NUTRANSFERENCIA",
+        "Espécie": "TRANSFERENCIA.INESPECIE (tabela de domínio do SIGGO)",
+        "Nº SICONV/SIAFI": "TRANSFERENCIA.NUTRANSFSIAFI",
+        "Nº Original": "TRANSFERENCIA.NUORIGINAL",
+        "Concedente": "TRANSFERENCIA.COCONCENTE",
+        "Beneficiário": "TRANSFERENCIA.COBENEFICIADO + UNIDADEGESTORA.NOUG",
+        "UG registrante": "TRANSFERENCIA.COUG + UNIDADEGESTORA.NOUG",
+        "Objeto": "TRANSFERENCIA.TXOBJETORESUMIDO",
+        "Data de celebração": "TRANSFERENCIA.DACELEBRACAO",
+        "Início vigência": "TRANSFERENCIA.DAINIVIGENCIA",
+        "Fim vigência": "TRANSFERENCIA.DAFIMVIGENCIA",
+        "Valor transferência (R$)": "TRANSFERENCIA.VATRANSFERENCIA",
+        "Valor contrapartida (R$)": "TRANSFERENCIA.VACONTRAPARTIDA",
+    }
+    if t.empty:
+        return pd.DataFrame(columns=colunas), params
+
+    ug = carregar("unidadegestora_bruto.csv", dtype=str)
+    ug_nome = ug.drop_duplicates(subset="COUG").set_index("COUG")["NOUG"].str.strip()
+    ugs_df = set(ug["COUG"].str.strip())
+
+    # Filtro por PAPEL (nao por especie): so entram registros em que o
+    # concedente NAO e o GDF e o beneficiario E o GDF - ou seja, recurso
+    # externo (essencialmente Uniao) recebido pelo GDF. COCONCENTE e
+    # COBENEFICIADO podem vir em CNPJ puro OU codigo "UG-sequencial" (os
+    # dois formatos sao reconhecidos). Isso exclui automaticamente os casos
+    # em que o GDF e concedente (repassa a privados/OSCs ou a si mesmo) sem
+    # precisar de uma lista de especies para bloquear - testado empiricamente
+    # em 2026-09-16: 6 especies (Auxilio, Subvencao, Contribuicao, Termo de
+    # Outorga e Aceitacao, PDAF, Contrato de Gestao) tem ZERO casos de "Uniao
+    # -> GDF" na base toda, mas outras como Termo de Fomento tem alguns raros
+    # casos legitimos que uma lista de exclusao por especie perderia.
+    concedente_e_gdf = eh_gdf_qualquer_formato(t["COCONCENTE"], ugs_df)
+    beneficiario_e_gdf = eh_gdf_qualquer_formato(t["COBENEFICIADO"], ugs_df)
+    t = t[(~concedente_e_gdf) & beneficiario_e_gdf].copy()
+
+    t["especie"] = t["INESPECIE"].map(
+        lambda v: f"{int(v):02d} - {ESPECIE_LABELS.get(int(v), 'Código ' + str(int(v)))}" if pd.notna(v) else ""
+    )
+
+    prefixo_benef = t["COBENEFICIADO"].astype(str).str.strip().str.split("-").str[0]
+    nome_benef = prefixo_benef.map(ug_nome)
+    t["beneficiario_fmt"] = t["COBENEFICIADO"].astype(str).str.strip()
+    tem_nome = nome_benef.notna()
+    t.loc[tem_nome, "beneficiario_fmt"] = nome_benef[tem_nome] + " (" + t.loc[tem_nome, "COBENEFICIADO"].astype(str).str.strip() + ")"
+
+    coug_str = t["COUG"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
+    nome_coug = coug_str.map(ug_nome)
+    t["coug_fmt"] = coug_str
+    tem_nome_coug = nome_coug.notna()
+    t.loc[tem_nome_coug, "coug_fmt"] = nome_coug[tem_nome_coug] + " (" + coug_str[tem_nome_coug] + ")"
+
+    nutransfsiafi = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce")
+
+    saida = pd.DataFrame({
+        "Nº Transferência": t["NUTRANSFERENCIA"],
+        "Espécie": t["especie"],
+        "Nº SICONV/SIAFI": nutransfsiafi.where(nutransfsiafi > 0, "").astype(str).replace("0.0", ""),
+        "Nº Original": t["NUORIGINAL"],
+        "Concedente": t["COCONCENTE"],
+        "Beneficiário": t["beneficiario_fmt"],
+        "UG registrante": t["coug_fmt"],
+        "Objeto": t["TXOBJETORESUMIDO"].astype(str).str.slice(0, 120),
+        "Data de celebração": fmt_data(t["DACELEBRACAO"]),
+        "Início vigência": fmt_data(t["DAINIVIGENCIA"]),
+        "Fim vigência": fmt_data(t["DAFIMVIGENCIA"]),
+        "Valor transferência (R$)": num(t["VATRANSFERENCIA"]),
+        "Valor contrapartida (R$)": num(t["VACONTRAPARTIDA"]),
+    })
+    return saida.sort_values("Nº Transferência", ascending=False), params
+
+
+# ---------------------------------------------------------------------------
+# 6) Cruzamento SIGGO x TransfereGov
+# ---------------------------------------------------------------------------
+
+def montar_cruzamento():
+    """
+    Para cada registro do SIGGO (ja filtrado por papel: Uniao->GDF), tenta
+    achar a que instrumento do TransfereGov ele corresponde, em ordem de
+    confianca:
+      1) EXATA: NUTRANSFSIAFI == NR_CONVENIO no SICONV (chave validada em
+         project_transferegov_siggo_chave).
+      2) POR VALOR: VATRANSFERENCIA bate com vl_total_planejamento_gastos
+         (Gestao de Parcerias), valor_total_repasse_plano_acao/valor_total_
+         plano_acao (Fundo a Fundo) ou valor_custeio+investimento (Especiais)
+         - heuristica, sujeita a falso positivo em valores redondos/repetidos
+         (ver memoria project_lacuna_saude_fundoafundo).
+      3) SEM CORRESPONDENCIA: nao achou em nenhuma fonte extraida.
+    """
+    t = carregar("df_siggo_transferencia.csv")
+    colunas = ["Nº Transferência", "Espécie", "Beneficiário", "Objeto", "Valor transferência (R$)",
+               "Data de celebração", "Encontrado em", "Confiança", "Identificador na fonte"]
+    params = {
+        "Nº Transferência": "TRANSFERENCIA.NUTRANSFERENCIA",
+        "Espécie": "TRANSFERENCIA.INESPECIE",
+        "Beneficiário": "TRANSFERENCIA.COBENEFICIADO + UNIDADEGESTORA.NOUG",
+        "Objeto": "TRANSFERENCIA.TXOBJETORESUMIDO",
+        "Valor transferência (R$)": "TRANSFERENCIA.VATRANSFERENCIA",
+        "Data de celebração": "TRANSFERENCIA.DACELEBRACAO",
+        "Encontrado em": "resultado do cruzamento (ver metodologia no rodapé)",
+        "Confiança": "Exata (nº) ou Por valor (heurística)",
+        "Identificador na fonte": "NR_CONVENIO / cd_parceria / codigo_plano_acao, conforme a fonte",
+    }
+    if t.empty:
+        return pd.DataFrame(columns=colunas), params
+
+    ug = carregar("unidadegestora_bruto.csv", dtype=str)
+    ugs_df = set(ug["COUG"].str.strip())
+    ug_nome = ug.drop_duplicates(subset="COUG").set_index("COUG")["NOUG"].str.strip()
+
+    concedente_e_gdf = eh_gdf_qualquer_formato(t["COCONCENTE"], ugs_df)
+    beneficiario_e_gdf = eh_gdf_qualquer_formato(t["COBENEFICIADO"], ugs_df)
+    t = t[(~concedente_e_gdf) & beneficiario_e_gdf].copy()
+
+    t["especie"] = t["INESPECIE"].map(
+        lambda v: f"{int(v):02d} - {ESPECIE_LABELS.get(int(v), 'Código ' + str(int(v)))}" if pd.notna(v) else ""
+    )
+    prefixo_benef = t["COBENEFICIADO"].astype(str).str.strip().str.split("-").str[0]
+    nome_benef = prefixo_benef.map(ug_nome)
+    t["beneficiario_fmt"] = t["COBENEFICIADO"].astype(str).str.strip()
+    tem_nome = nome_benef.notna()
+    t.loc[tem_nome, "beneficiario_fmt"] = nome_benef[tem_nome] + " (" + t.loc[tem_nome, "COBENEFICIADO"].astype(str).str.strip() + ")"
+    t["nutransfsiafi_limpo"] = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce").fillna(0).astype("int64").astype(str)
+
+    # --- Fonte 1: SICONV (chave exata) ---
+    convenio = carregar("df_siconv_convenio.csv", dtype={"NR_CONVENIO": str})
+    proposta_sic = carregar("df_siconv_proposta.csv")
+    sic = convenio.merge(proposta_sic[["ID_PROPOSTA", "IDENTIF_PROPONENTE"]], on="ID_PROPOSTA", how="left")
+    sic = sic[eh_gdf(sic["IDENTIF_PROPONENTE"])]
+    nrs_siconv = set(sic["NR_CONVENIO"].dropna().astype(str).str.strip())
+
+    # --- Fonte 2: Gestao de Parcerias (valor) ---
+    proposta_gp = carregar("df_parcerias_proposta.csv")
+    parceria_gp = carregar("df_parcerias_parceria.csv")
+    gp = proposta_gp.merge(parceria_gp[["id_proposta", "cd_parceria"]], on="id_proposta", how="left")
+    gp = gp[eh_gdf(gp["cnpj_ente_recebedor"])].copy()
+    gp["valor_planej"] = num(gp["vl_total_planejamento_gastos"]).round(2)
+    valor_para_parceria = gp[gp["valor_planej"] > 0].groupby("valor_planej")["cd_parceria"].apply(list)
+
+    # --- Fonte 3: Fundo a Fundo (valor) ---
+    faf = carregar("df_fundoafundo_plano_acao.csv")
+    faf = faf[eh_gdf(faf["cnpj_ente_recebedor_plano_acao"])].copy()
+    faf["valor_repasse"] = num(faf.get("valor_total_repasse_plano_acao")).round(2)
+    valor_para_faf = faf[faf["valor_repasse"] > 0].groupby("valor_repasse")["codigo_plano_acao"].apply(list)
+
+    # --- Fonte 4: Transferencias Especiais (valor) ---
+    esp_plano = carregar("df_especiais_plano_acao.csv")
+    esp_benef = carregar("df_especiais_beneficiario.csv")
+    esp = esp_plano.merge(esp_benef[["id_beneficiario", "cnpj_beneficiario"]], on="id_beneficiario", how="left")
+    esp = esp[eh_gdf(esp["cnpj_beneficiario"])].copy()
+    esp["valor_total"] = (num(esp["valor_custeio_plano_acao"]) + num(esp["valor_investimento_plano_acao"])).round(2)
+    valor_para_esp = esp[esp["valor_total"] > 0].groupby("valor_total")["codigo_plano_acao"].apply(list)
+
+    def cruzar(row):
+        if row["nutransfsiafi_limpo"] != "0" and row["nutransfsiafi_limpo"] in nrs_siconv:
+            return pd.Series(["SICONV Legado", "Exata (nº convênio)", row["nutransfsiafi_limpo"]])
+        v = round(float(row["VATRANSFERENCIA"]), 2) if pd.notna(row["VATRANSFERENCIA"]) else 0
+        if v > 0:
+            if v in valor_para_parceria.index:
+                ids = valor_para_parceria.loc[v]
+                return pd.Series(["Gestão de Parcerias", "Por valor", " | ".join(map(str, ids))])
+            if v in valor_para_faf.index:
+                ids = valor_para_faf.loc[v]
+                return pd.Series(["Fundo a Fundo", "Por valor", " | ".join(map(str, ids))])
+            if v in valor_para_esp.index:
+                ids = valor_para_esp.loc[v]
+                return pd.Series(["Transferências Especiais", "Por valor", " | ".join(map(str, ids))])
+        return pd.Series(["Sem correspondência", "", ""])
+
+    t[["encontrado_em", "confianca", "identificador"]] = t.apply(cruzar, axis=1)
+
+    saida = pd.DataFrame({
+        "Nº Transferência": t["NUTRANSFERENCIA"],
+        "Espécie": t["especie"],
+        "Beneficiário": t["beneficiario_fmt"],
+        "Objeto": t["TXOBJETORESUMIDO"].astype(str).str.slice(0, 100),
+        "Valor transferência (R$)": num(t["VATRANSFERENCIA"]),
+        "Data de celebração": fmt_data(t["DACELEBRACAO"]),
+        "Encontrado em": t["encontrado_em"],
+        "Confiança": t["confianca"],
+        "Identificador na fonte": t["identificador"],
+    })
+    return saida.sort_values("Nº Transferência", ascending=False), params
+
+
+# ---------------------------------------------------------------------------
 # Montagem do HTML
 # ---------------------------------------------------------------------------
 
@@ -374,6 +612,12 @@ ABAS = [
     {"id": "siconv", "titulo": "SICONV Legado", "icone": "📄",
      "fonte": "Download CSV — siconv_convenio.csv + siconv_proposta.csv + siconv_emenda.csv",
      "coluna_ente": "Ente beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
+    {"id": "siggo", "titulo": "SIGGO", "icone": "🗄️",
+     "fonte": "Oracle SIGGO — MIL2026.TRANSFERENCIA + MIL2026.UNIDADEGESTORA (ainda não cruzado com o TransfereGov)",
+     "coluna_ente": "Beneficiário", "coluna_valor_kpi": "Valor transferência (R$)"},
+    {"id": "cruzamento", "titulo": "Cruzamento SIGGO×TransfereGov", "icone": "🔗",
+     "fonte": "SIGGO (MIL2026.TRANSFERENCIA) cruzado com as 4 fontes do TransfereGov — nº exato (SICONV) ou valor (demais, heurística)",
+     "coluna_ente": "Beneficiário", "coluna_valor_kpi": "Valor transferência (R$)"},
 ]
 
 
@@ -430,6 +674,76 @@ def montar_filtros(df: pd.DataFrame, aba_id: str) -> str:
     """
 
 
+def montar_filtros_siggo(df: pd.DataFrame, aba_id: str) -> str:
+    especies = sorted(e for e in df["Espécie"].dropna().unique() if e)
+    opts_especie = "".join(f'<option value="{e}">{e}</option>' for e in especies)
+
+    return f"""
+    <div class="fbar">
+      <div class="fg">
+        <label>Espécie</label>
+        <select id="fesp-{aba_id}" onchange="aplicarFiltrosSiggo()"><option value="">Todas</option>{opts_especie}</select>
+      </div>
+      <div class="fg">
+        <label>Nº Transferência</label>
+        <input type="text" id="fnt-{aba_id}" placeholder="Nº transferência…" oninput="aplicarFiltrosSiggo()">
+      </div>
+      <div class="fg">
+        <label>Concedente</label>
+        <input type="text" id="fcon-{aba_id}" placeholder="CNPJ do concedente…" oninput="aplicarFiltrosSiggo()">
+      </div>
+      <div class="fg">
+        <label>Beneficiário</label>
+        <input type="text" id="fben-{aba_id}" placeholder="Nome ou código da UG…" oninput="aplicarFiltrosSiggo()">
+      </div>
+      <div class="fg">
+        <label>Nº SICONV/SIAFI</label>
+        <input type="text" id="fsia-{aba_id}" placeholder="Nº SICONV/SIAFI…" oninput="aplicarFiltrosSiggo()">
+      </div>
+      <div class="fg">
+        <label>Busca livre</label>
+        <input type="text" id="fl-{aba_id}" placeholder="Qualquer campo…" oninput="aplicarFiltrosSiggo()">
+      </div>
+      <div class="bgrp">
+        <button class="btn btn-g" onclick="limparFiltrosSiggo()">↺ Limpar filtros</button>
+        <span class="contador" id="contador-{aba_id}">{len(df)} registros</span>
+      </div>
+    </div>
+    """
+
+
+def montar_filtros_cruzamento(df: pd.DataFrame, aba_id: str) -> str:
+    especies = sorted(e for e in df["Espécie"].dropna().unique() if e)
+    fontes = sorted(e for e in df["Encontrado em"].dropna().unique() if e)
+    opts_especie = "".join(f'<option value="{e}">{e}</option>' for e in especies)
+    opts_fonte = "".join(f'<option value="{e}">{e}</option>' for e in fontes)
+
+    return f"""
+    <div class="fbar">
+      <div class="fg">
+        <label>Encontrado em</label>
+        <select id="ffonte-{aba_id}" onchange="aplicarFiltrosCruzamento()"><option value="">Todas</option>{opts_fonte}</select>
+      </div>
+      <div class="fg">
+        <label>Espécie</label>
+        <select id="fesp-{aba_id}" onchange="aplicarFiltrosCruzamento()"><option value="">Todas</option>{opts_especie}</select>
+      </div>
+      <div class="fg">
+        <label>Beneficiário</label>
+        <input type="text" id="fben-{aba_id}" placeholder="Nome ou código da UG…" oninput="aplicarFiltrosCruzamento()">
+      </div>
+      <div class="fg">
+        <label>Busca livre</label>
+        <input type="text" id="fl-{aba_id}" placeholder="Qualquer campo…" oninput="aplicarFiltrosCruzamento()">
+      </div>
+      <div class="bgrp">
+        <button class="btn btn-g" onclick="limparFiltrosCruzamento()">↺ Limpar filtros</button>
+        <span class="contador" id="contador-{aba_id}">{len(df)} registros</span>
+      </div>
+    </div>
+    """
+
+
 def montar_tabela_html(df: pd.DataFrame, aba_id: str, params: dict) -> str:
     colunas = list(df.columns)
     registros = df.fillna("").to_dict(orient="records")
@@ -470,6 +784,8 @@ def main():
         "especiais": montar_especiais(),
         "fundoafundo": montar_fundoafundo(),
         "siconv": montar_siconv(),
+        "siggo": montar_siggo(),
+        "cruzamento": montar_cruzamento(),
     }
     dados = {aid: df for aid, (df, _) in resultados.items()}
     parametros = {aid: params for aid, (_, params) in resultados.items()}
@@ -485,7 +801,12 @@ def main():
             f'{aba["icone"]} {aba["titulo"]} <span class="badge-count">{len(df)}</span></button>'
         )
 
-        filtros_html = montar_filtros(df, aid)
+        if aid == "siggo":
+            filtros_html = montar_filtros_siggo(df, aid)
+        elif aid == "cruzamento":
+            filtros_html = montar_filtros_cruzamento(df, aid)
+        else:
+            filtros_html = montar_filtros(df, aid)
         tabela_html = montar_tabela_html(df, aid, parametros[aid])
 
         conteudo_html.append(f"""
@@ -506,7 +827,8 @@ def main():
     saida.write_text(html, encoding="utf-8")
     print(f"Painel salvo em {saida}")
     for aid, df in dados.items():
-        print(f"  {aid}: {len(df)} registros (somente GDF)")
+        rotulo = "filtrado por papel: concedente != GDF e beneficiario = GDF" if aid == "siggo" else "somente GDF"
+        print(f"  {aid}: {len(df)} registros ({rotulo})")
 
 
 TEMPLATE = """<!DOCTYPE html>
@@ -615,7 +937,20 @@ window.ORDEM = {{}};
   Registros de <strong>Termo de Fomento</strong> são excluídos explicitamente no SICONV (via campo Modalidade), embora o
   filtro de CNPJ já os elimine na prática (é um instrumento exclusivo com OSCs). Campo <strong>Valor pago</strong> segue as
   regras de cálculo usadas pelo setor de Transparência/Governo Aberto do DF (cadeia de tabelas por fonte). Fonte dos dados:
-  <code>https://api-publica.transferegov.gestao.gov.br/</code>. Extração bruta para análise exploratória; ainda não cruzada com o SIGGO.
+  <code>https://api-publica.transferegov.gestao.gov.br/</code>.<br><br>
+  <strong>Aba SIGGO:</strong> de 18.624 registros de <code>MIL2026.TRANSFERENCIA</code>, mostra só os <strong>1.928</strong> em que
+  o concedente NÃO é o GDF e o beneficiário É o GDF — ou seja, recurso externo (essencialmente da União) recebido pelo GDF, excluindo
+  os 16.512 casos em que o próprio GDF é concedente (a órgãos privados/OSCs ou a si mesmo) e os 88 casos intra-GDF. O papel é
+  reconhecido tanto em CNPJ quanto no formato "UG-sequencial" usado por <code>COCONCENTE</code>/<code>COBENEFICIADO</code>. Filtro por
+  papel, não por espécie — testado e mais preciso (6 espécies como Auxílio/Subvenção/PDAF nunca aparecem como "União→GDF" na base
+  inteira, mas Termo de Fomento tem alguns casos raros e legítimos que uma lista de espécies excluiria por engano). Esta aba ainda não
+  foi cruzada com as demais (TransfereGov); serve para validação e exploração antes do cruzamento.<br><br>
+  <strong>Aba Cruzamento SIGGO×TransfereGov:</strong> para cada um dos 1.928 registros do SIGGO, tenta achar o instrumento
+  correspondente no TransfereGov, em ordem de confiança — <strong>(1) Exata:</strong> <code>NUTRANSFSIAFI</code> =
+  <code>NR_CONVENIO</code> no SICONV; <strong>(2) Por valor</strong> (heurística menos confiável, sujeita a falso positivo em
+  valores redondos/repetidos): <code>VATRANSFERENCIA</code> bate com o valor planejado/repassado em Gestão de Parcerias, Fundo a
+  Fundo ou Transferências Especiais. Resultado atual: 354 exatos (SICONV), 365+8+8 por valor (Gestão de Parcerias/Fundo a
+  Fundo/Especiais), 1.193 sem correspondência em nenhuma fonte extraída até agora.
 </div>
 
 <script>
@@ -667,6 +1002,64 @@ function limparFiltros(id) {{
   document.getElementById('fs-' + id).value = '';
   const elMod = document.getElementById('fm-' + id);
   if (elMod) elMod.value = '';
+  document.getElementById('fl-' + id).value = '';
+  renderizar(id, DADOS[id]);
+}}
+
+function aplicarFiltrosSiggo() {{
+  const id = 'siggo';
+  const esp = document.getElementById('fesp-' + id).value;
+  const nt = (document.getElementById('fnt-' + id).value || '').toLowerCase();
+  const con = (document.getElementById('fcon-' + id).value || '').toLowerCase();
+  const ben = (document.getElementById('fben-' + id).value || '').toLowerCase();
+  const sia = (document.getElementById('fsia-' + id).value || '').toLowerCase();
+  const livre = (document.getElementById('fl-' + id).value || '').toLowerCase();
+
+  const linhas = DADOS[id].filter(row => {{
+    if (esp && row['Espécie'] !== esp) return false;
+    if (nt && !String(row['Nº Transferência'] || '').toLowerCase().includes(nt)) return false;
+    if (con && !String(row['Concedente (CNPJ)'] || '').toLowerCase().includes(con)) return false;
+    if (ben && !String(row['Beneficiário'] || '').toLowerCase().includes(ben)) return false;
+    if (sia && !String(row['Nº SICONV/SIAFI'] || '').toLowerCase().includes(sia)) return false;
+    if (livre && !Object.values(row).some(v => String(v).toLowerCase().includes(livre))) return false;
+    return true;
+  }});
+  renderizar(id, linhas);
+}}
+
+function limparFiltrosSiggo() {{
+  const id = 'siggo';
+  document.getElementById('fesp-' + id).value = '';
+  document.getElementById('fnt-' + id).value = '';
+  document.getElementById('fcon-' + id).value = '';
+  document.getElementById('fben-' + id).value = '';
+  document.getElementById('fsia-' + id).value = '';
+  document.getElementById('fl-' + id).value = '';
+  renderizar(id, DADOS[id]);
+}}
+
+function aplicarFiltrosCruzamento() {{
+  const id = 'cruzamento';
+  const fonte = document.getElementById('ffonte-' + id).value;
+  const esp = document.getElementById('fesp-' + id).value;
+  const ben = (document.getElementById('fben-' + id).value || '').toLowerCase();
+  const livre = (document.getElementById('fl-' + id).value || '').toLowerCase();
+
+  const linhas = DADOS[id].filter(row => {{
+    if (fonte && row['Encontrado em'] !== fonte) return false;
+    if (esp && row['Espécie'] !== esp) return false;
+    if (ben && !String(row['Beneficiário'] || '').toLowerCase().includes(ben)) return false;
+    if (livre && !Object.values(row).some(v => String(v).toLowerCase().includes(livre))) return false;
+    return true;
+  }});
+  renderizar(id, linhas);
+}}
+
+function limparFiltrosCruzamento() {{
+  const id = 'cruzamento';
+  document.getElementById('ffonte-' + id).value = '';
+  document.getElementById('fesp-' + id).value = '';
+  document.getElementById('fben-' + id).value = '';
   document.getElementById('fl-' + id).value = '';
   renderizar(id, DADOS[id]);
 }}

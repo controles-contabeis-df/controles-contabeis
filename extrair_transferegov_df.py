@@ -108,7 +108,7 @@ def extrair_especiais():
     df_beneficiarios = pd.DataFrame(beneficiarios)
     salvar(df_beneficiarios, "df_especiais_beneficiario.csv")
 
-    planos, empenhos, documentos, pagamentos, executores = [], [], [], [], []
+    planos, empenhos, documentos, pagamentos, executores, planos_trabalho = [], [], [], [], [], []
     ids_beneficiario = df_beneficiarios["id_beneficiario"].dropna().unique() if not df_beneficiarios.empty else []
 
     for i, id_beneficiario in enumerate(ids_beneficiario, start=1):
@@ -119,6 +119,9 @@ def extrair_especiais():
             if not id_plano:
                 continue
             executores.extend(buscar_por_id(base, "executores-especiais", "id_plano_acao", id_plano))
+            # /planos-trabalho-especiais traz Situacao/Data Inicio/Data Fim de
+            # Execucao (padrao do User Story do setor de Transparencia).
+            planos_trabalho.extend(buscar_por_id(base, "planos-trabalho-especiais", "id_plano_acao", id_plano))
             emp = buscar_por_id(base, "empenhos-especiais", "id_plano_acao", id_plano)
             empenhos.extend(emp)
             for e in emp:
@@ -137,6 +140,7 @@ def extrair_especiais():
 
     salvar(pd.DataFrame(planos), "df_especiais_plano_acao.csv")
     salvar(pd.DataFrame(executores), "df_especiais_executor.csv")
+    salvar(pd.DataFrame(planos_trabalho), "df_especiais_plano_trabalho.csv")
     salvar(pd.DataFrame(empenhos), "df_especiais_empenho.csv")
     salvar(pd.DataFrame(documentos), "df_especiais_documento_habil.csv")
     salvar(pd.DataFrame(pagamentos), "df_especiais_ordem_pagamento.csv")
