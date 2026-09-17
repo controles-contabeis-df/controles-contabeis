@@ -17,6 +17,7 @@ Salva transferegov.html na mesma pasta.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +27,23 @@ PASTA = Path(__file__).resolve().parent
 
 def carregar(nome, **kwargs):
     return pd.read_csv(PASTA / nome, low_memory=False, **kwargs)
+
+
+def carregar_com_colunas(nome, colunas, **kwargs):
+    """
+    Como carregar(), mas garante que as colunas listadas existam mesmo se o
+    CSV estiver vazio ou zerado (ex: quando uma extracao falhou por
+    instabilidade da API de origem) - evita erro em vez de travar o resto
+    do painel por causa de uma fonte fora do ar.
+    """
+    try:
+        df = carregar(nome, **kwargs)
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame()
+    for c in colunas:
+        if c not in df.columns:
+            df[c] = pd.NA
+    return df
 
 
 def num(serie):
@@ -99,9 +117,12 @@ def extrair_ano(serie):
 
 def montar_parcerias():
     proposta = carregar("df_parcerias_proposta.csv")
-    parceria = carregar("df_parcerias_parceria.csv")
-    doc_habil = carregar("df_parcerias_documento_habil.csv")
-    ordem_pag = carregar("df_parcerias_ordem_pagamento.csv")
+    parceria = carregar_com_colunas(
+        "df_parcerias_parceria.csv",
+        ["id_proposta", "id_parceria", "cd_parceria", "in_situacao_parceria", "dh_assinatura", "cd_processo_sei"],
+    )
+    doc_habil = carregar_com_colunas("df_parcerias_documento_habil.csv", ["id_documento_habil", "id_parceria"])
+    ordem_pag = carregar_com_colunas("df_parcerias_ordem_pagamento.csv", ["id_documento_habil", "vl_ordem_pagamento"])
 
     # valor repassado = soma das ordens de pagamento, agregadas por parceria
     # (ordem_pagamento -> id_documento_habil -> documento_habil -> id_parceria)
@@ -485,32 +506,51 @@ def montar_siggo():
 # 6) Cruzamento SIGGO x TransfereGov
 # ---------------------------------------------------------------------------
 
+def _nome_canonico(serie_cnpj, cnpj_para_nome):
+    """CNPJ (qualquer formato) -> nome oficial da UG (NOUG), quando reconhecido."""
+    return normalizar_cnpj(serie_cnpj).map(cnpj_para_nome)
+
+
+def _so_digitos(serie):
+    return serie.astype(str).str.replace(r"\D", "", regex=True)
+
+
 def montar_cruzamento():
     """
     Para cada registro do SIGGO (ja filtrado por papel: Uniao->GDF), tenta
     achar a que instrumento do TransfereGov ele corresponde, em ordem de
-    confianca:
+    confianca decrescente (chave mais robusta primeiro):
       1) EXATA: NUTRANSFSIAFI == NR_CONVENIO no SICONV (chave validada em
          project_transferegov_siggo_chave).
-      2) POR VALOR: VATRANSFERENCIA bate com vl_total_planejamento_gastos
-         (Gestao de Parcerias), valor_total_repasse_plano_acao/valor_total_
-         plano_acao (Fundo a Fundo) ou valor_custeio+investimento (Especiais)
-         - heuristica, sujeita a falso positivo em valores redondos/repetidos
-         (ver memoria project_lacuna_saude_fundoafundo).
-      3) SEM CORRESPONDENCIA: nao achou em nenhuma fonte extraida.
+      2) SUBSTRING: os digitos de NUORIGINAL contem (ou estao contidos em)
+         os digitos do identificador da fonte (cd_parceria / codigo_plano_
+         acao) - so considerado quando o trecho comum tem 6+ digitos, para
+         evitar coincidencia trivial.
+      3) BENEFICIARIO+DATA+VALOR: nome oficial da UG beneficiaria (via CNPJ,
+         mesma fonte MIL2026.UNIDADEGESTORA dos dois lados) + ano da data de
+         celebracao/vigencia + valor batem juntos - so disponivel para Fundo
+         a Fundo, unica fonte com data de vigencia bem preenchida.
+      4) BENEFICIARIO+VALOR: nome oficial da UG beneficiaria + valor batem
+         juntos, sem exigir data.
+      5) VALOR (sem beneficiario): ultimo recurso, mais sujeito a falso
+         positivo em valores redondos/repetidos (ver memoria
+         project_lacuna_saude_fundoafundo).
+      6) SEM CORRESPONDENCIA: nao achou em nenhuma fonte extraida.
     """
     t = carregar("df_siggo_transferencia.csv")
-    colunas = ["Nº Transferência", "Espécie", "Beneficiário", "Objeto", "Valor transferência (R$)",
-               "Data de celebração", "Encontrado em", "Confiança", "Identificador na fonte"]
+    colunas = ["Nº Transferência", "Espécie", "Beneficiário", "Objeto", "NUTRANSFSIAFI", "NUORIGINAL",
+               "Valor transferência (R$)", "Data de celebração", "Encontrado em", "Confiança", "Identificador na fonte"]
     params = {
         "Nº Transferência": "TRANSFERENCIA.NUTRANSFERENCIA",
         "Espécie": "TRANSFERENCIA.INESPECIE",
         "Beneficiário": "TRANSFERENCIA.COBENEFICIADO + UNIDADEGESTORA.NOUG",
         "Objeto": "TRANSFERENCIA.TXOBJETORESUMIDO",
+        "NUTRANSFSIAFI": "TRANSFERENCIA.NUTRANSFSIAFI",
+        "NUORIGINAL": "TRANSFERENCIA.NUORIGINAL",
         "Valor transferência (R$)": "TRANSFERENCIA.VATRANSFERENCIA",
         "Data de celebração": "TRANSFERENCIA.DACELEBRACAO",
         "Encontrado em": "resultado do cruzamento (ver metodologia no rodapé)",
-        "Confiança": "Exata (nº) ou Por valor (heurística)",
+        "Confiança": "ver hierarquia de 9 camadas no rodapé (Nº Convênio > substrings > benef.+data/ano/valor > benef.+objeto > valor)",
         "Identificador na fonte": "NR_CONVENIO / cd_parceria / codigo_plano_acao, conforme a fonte",
     }
     if t.empty:
@@ -519,6 +559,10 @@ def montar_cruzamento():
     ug = carregar("unidadegestora_bruto.csv", dtype=str)
     ugs_df = set(ug["COUG"].str.strip())
     ug_nome = ug.drop_duplicates(subset="COUG").set_index("COUG")["NOUG"].str.strip()
+    cnpjs_gdf_df = carregar("cnpjs_gdf.csv", dtype=str)
+    cnpj_para_nome = cnpjs_gdf_df.drop_duplicates(subset="NUCGC").assign(
+        NUCGC=lambda d: normalizar_cnpj(d["NUCGC"])
+    ).set_index("NUCGC")["NOUG"].str.strip()
 
     concedente_e_gdf = eh_gdf_qualquer_formato(t["COCONCENTE"], ugs_df)
     beneficiario_e_gdf = eh_gdf_qualquer_formato(t["COBENEFICIADO"], ugs_df)
@@ -532,7 +576,11 @@ def montar_cruzamento():
     t["beneficiario_fmt"] = t["COBENEFICIADO"].astype(str).str.strip()
     tem_nome = nome_benef.notna()
     t.loc[tem_nome, "beneficiario_fmt"] = nome_benef[tem_nome] + " (" + t.loc[tem_nome, "COBENEFICIADO"].astype(str).str.strip() + ")"
+    t["nome_canonico_siggo"] = nome_benef  # nome oficial da UG, sem sufixo - usado nas camadas de benef.
     t["nutransfsiafi_limpo"] = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce").fillna(0).astype("int64").astype(str)
+    t["nuoriginal_digitos"] = _so_digitos(t["NUORIGINAL"])
+    t["ano_celebracao"] = extrair_ano(t["DACELEBRACAO"])
+    t["ano_vigencia"] = extrair_ano(t["DAINIVIGENCIA"])
 
     # --- Fonte 1: SICONV (chave exata) ---
     convenio = carregar("df_siconv_convenio.csv", dtype={"NR_CONVENIO": str})
@@ -541,51 +589,279 @@ def montar_cruzamento():
     sic = sic[eh_gdf(sic["IDENTIF_PROPONENTE"])]
     nrs_siconv = set(sic["NR_CONVENIO"].dropna().astype(str).str.strip())
 
-    # --- Fonte 2: Gestao de Parcerias (valor) ---
+    # --- Fonte 2: Gestao de Parcerias ---
     proposta_gp = carregar("df_parcerias_proposta.csv")
-    parceria_gp = carregar("df_parcerias_parceria.csv")
+    parceria_gp = carregar_com_colunas("df_parcerias_parceria.csv", ["id_proposta", "id_parceria", "cd_parceria"])
     gp = proposta_gp.merge(parceria_gp[["id_proposta", "cd_parceria"]], on="id_proposta", how="left")
     gp = gp[eh_gdf(gp["cnpj_ente_recebedor"])].copy()
     gp["valor_planej"] = num(gp["vl_total_planejamento_gastos"]).round(2)
-    valor_para_parceria = gp[gp["valor_planej"] > 0].groupby("valor_planej")["cd_parceria"].apply(list)
+    gp["nome_canonico"] = _nome_canonico(gp["cnpj_ente_recebedor"], cnpj_para_nome)
+    gp["cd_parceria_str"] = gp["cd_parceria"].dropna().astype("Int64").astype(str)
+    gp["ano_proposta"] = pd.to_numeric(gp.get("ano_proposta"), errors="coerce")
+    gp["objeto_upper"] = gp["ds_objeto"].astype(str).str.upper().str.strip()
+    # So considera linhas com identificador valido - se a extracao de /parceria
+    # falhou (fonte fora do ar), cd_parceria_str fica todo NaN e NENHUMA
+    # tabela de cruzamento abaixo deve ser criada, senao viram "matches" com
+    # identificador vazio (falso positivo).
+    gp_valido = gp[gp["cd_parceria_str"].notna()]
+    ids_cd_parceria = gp["cd_parceria_str"].dropna().unique().tolist()
+    valor_para_parceria = gp_valido[gp_valido["valor_planej"] > 0].groupby("valor_planej")["cd_parceria_str"].apply(list)
+    benef_valor_para_parceria = gp_valido[(gp_valido["valor_planej"] > 0) & gp_valido["nome_canonico"].notna()].groupby(
+        ["nome_canonico", "valor_planej"]
+    )["cd_parceria_str"].apply(list)
+    benef_ano_valor_para_parceria = gp_valido[
+        (gp_valido["valor_planej"] > 0) & gp_valido["nome_canonico"].notna() & gp_valido["ano_proposta"].notna()
+    ].groupby(["nome_canonico", "ano_proposta", "valor_planej"])["cd_parceria_str"].apply(list)
+    benef_objeto_para_parceria = gp_valido[gp_valido["nome_canonico"].notna() & (gp_valido["objeto_upper"].str.len() >= 15)].groupby(
+        "nome_canonico"
+    ).apply(lambda g: list(zip(g["cd_parceria_str"], g["objeto_upper"])))
+    conta_gp = None
+    try:
+        conta_gp_df = carregar_com_colunas("df_parcerias_conta.csv", ["id_parceria", "tx_conta"])
+        conta_gp_df = conta_gp_df.merge(parceria_gp[["id_parceria", "cd_parceria"]], on="id_parceria", how="left")
+        conta_gp_df["conta_digitos"] = _so_digitos(conta_gp_df["tx_conta"])
+        conta_gp_df["cd_parceria_str"] = conta_gp_df["cd_parceria"].dropna().astype("Int64").astype(str)
+        conta_gp = conta_gp_df[conta_gp_df["conta_digitos"].str.len() >= 4]
+    except FileNotFoundError:
+        conta_gp = pd.DataFrame(columns=["conta_digitos", "cd_parceria_str"])
 
-    # --- Fonte 3: Fundo a Fundo (valor) ---
+    # --- Fonte 3: Fundo a Fundo ---
     faf = carregar("df_fundoafundo_plano_acao.csv")
     faf = faf[eh_gdf(faf["cnpj_ente_recebedor_plano_acao"])].copy()
     faf["valor_repasse"] = num(faf.get("valor_total_repasse_plano_acao")).round(2)
+    faf["nome_canonico"] = _nome_canonico(faf["cnpj_ente_recebedor_plano_acao"], cnpj_para_nome)
+    faf["ano_vigencia"] = extrair_ano(faf["data_inicio_vigencia_plano_acao"])
+    faf["codigo_digitos"] = _so_digitos(faf["codigo_plano_acao"])
+    faf["objeto_upper"] = faf["objetivos_plano_acao"].astype(str).str.upper().str.strip()
     valor_para_faf = faf[faf["valor_repasse"] > 0].groupby("valor_repasse")["codigo_plano_acao"].apply(list)
+    benef_valor_para_faf = faf[(faf["valor_repasse"] > 0) & faf["nome_canonico"].notna()].groupby(
+        ["nome_canonico", "valor_repasse"]
+    )["codigo_plano_acao"].apply(list)
+    # Data exata (dia/mes/ano) de inicio de vigencia - camada mais forte que ano
+    faf["data_inicio_str"] = fmt_data(faf["data_inicio_vigencia_plano_acao"])
+    benef_data_exata_valor_para_faf = faf[
+        (faf["valor_repasse"] > 0) & faf["nome_canonico"].notna() & (faf["data_inicio_str"] != "")
+    ].groupby(["nome_canonico", "data_inicio_str", "valor_repasse"])["codigo_plano_acao"].apply(list)
+    benef_ano_valor_para_faf = faf[
+        (faf["valor_repasse"] > 0) & faf["nome_canonico"].notna() & faf["ano_vigencia"].notna()
+    ].groupby(["nome_canonico", "ano_vigencia", "valor_repasse"])["codigo_plano_acao"].apply(list)
+    benef_objeto_para_faf = faf[faf["nome_canonico"].notna() & (faf["objeto_upper"].str.len() >= 15)].groupby(
+        "nome_canonico"
+    ).apply(lambda g: list(zip(g["codigo_plano_acao"], g["objeto_upper"])))
+    try:
+        conta_faf_df = carregar("df_fundoafundo_dados_bancarios.csv")
+        conta_faf_df["conta_digitos"] = _so_digitos(conta_faf_df.get("numero_conta_plano_acao_dado_bancario", pd.Series(dtype=str)))
+        conta_faf_df = conta_faf_df.merge(faf[["id_plano_acao", "codigo_plano_acao"]], on="id_plano_acao", how="left")
+        conta_faf = conta_faf_df[conta_faf_df["conta_digitos"].str.len() >= 4]
+    except FileNotFoundError:
+        conta_faf = pd.DataFrame(columns=["conta_digitos", "codigo_plano_acao"])
 
-    # --- Fonte 4: Transferencias Especiais (valor) ---
+    # --- Fonte 4: Transferencias Especiais ---
     esp_plano = carregar("df_especiais_plano_acao.csv")
     esp_benef = carregar("df_especiais_beneficiario.csv")
     esp = esp_plano.merge(esp_benef[["id_beneficiario", "cnpj_beneficiario"]], on="id_beneficiario", how="left")
     esp = esp[eh_gdf(esp["cnpj_beneficiario"])].copy()
     esp["valor_total"] = (num(esp["valor_custeio_plano_acao"]) + num(esp["valor_investimento_plano_acao"])).round(2)
+    esp["nome_canonico"] = _nome_canonico(esp["cnpj_beneficiario"], cnpj_para_nome)
+    esp["codigo_digitos"] = _so_digitos(esp["codigo_plano_acao"])
+    esp["objeto_upper"] = esp["nome_objeto"].astype(str).str.upper().str.strip()
+    esp["ano_plano_acao"] = pd.to_numeric(esp.get("ano_plano_acao"), errors="coerce")
     valor_para_esp = esp[esp["valor_total"] > 0].groupby("valor_total")["codigo_plano_acao"].apply(list)
+    benef_valor_para_esp = esp[(esp["valor_total"] > 0) & esp["nome_canonico"].notna()].groupby(
+        ["nome_canonico", "valor_total"]
+    )["codigo_plano_acao"].apply(list)
+    benef_ano_valor_para_esp = esp[
+        (esp["valor_total"] > 0) & esp["nome_canonico"].notna() & esp["ano_plano_acao"].notna()
+    ].groupby(["nome_canonico", "ano_plano_acao", "valor_total"])["codigo_plano_acao"].apply(list)
+    benef_objeto_para_esp = esp[esp["nome_canonico"].notna() & (esp["objeto_upper"].str.len() >= 15)].groupby(
+        "nome_canonico"
+    ).apply(lambda g: list(zip(g["codigo_plano_acao"], g["objeto_upper"])))
+    try:
+        conta_esp = esp[_so_digitos(esp["numero_conta_plano_acao"]).str.len() >= 4].copy()
+        conta_esp["conta_digitos"] = _so_digitos(conta_esp["numero_conta_plano_acao"])
+    except KeyError:
+        conta_esp = pd.DataFrame(columns=["conta_digitos", "codigo_plano_acao"])
+
+    # Listas de digitos para busca por substring (ordenadas da mais longa p/
+    # a mais curta, para preferir o match mais especifico primeiro). Inclui
+    # o SICONV tambem - antes so procurava em Gestao de Parcerias/Fundo a
+    # Fundo/Especiais, e por isso perdia casos como NUTRANSFERENCIA 31017
+    # (NUORIGINAL "CONVÊNIO 941097/2023" deveria ter batido com o Nº Convênio
+    # 941097 do SICONV, mas o SICONV nunca era testado nessa busca).
+    digitos_siconv = sorted(nrs_siconv, key=len, reverse=True)
+    digitos_parceria = sorted(set(gp["cd_parceria_str"].dropna()), key=len, reverse=True)
+    digitos_faf = sorted(set(faf["codigo_digitos"].dropna()), key=len, reverse=True)
+    digitos_esp = sorted(set(esp["codigo_digitos"].dropna()), key=len, reverse=True)
+    FONTES_SUBSTRING = ((digitos_siconv, "SICONV Legado"),
+                         (digitos_parceria, "Gestão de Parcerias"),
+                         (digitos_faf, "Fundo a Fundo"),
+                         (digitos_esp, "Transferências Especiais"))
+
+    def busca_substring(digitos_campo):
+        """Procura um identificador de qualquer fonte dentro dos digitos do
+        campo informado (ou vice-versa) - usada para NUORIGINAL."""
+        if len(digitos_campo) < 6:
+            return None
+        for candidatos, fonte in FONTES_SUBSTRING:
+            for cod in candidatos:
+                if len(cod) >= 6 and (cod in digitos_campo or digitos_campo in cod):
+                    return fonte, cod
+        return None
+
+    # Indice de contas bancarias (digitos) para busca por substring com NUCONTA
+    contas_index = []
+    if not conta_gp.empty:
+        for _, r in conta_gp.iterrows():
+            if r["conta_digitos"] and pd.notna(r.get("cd_parceria_str")):
+                contas_index.append((r["conta_digitos"], "Gestão de Parcerias", r["cd_parceria_str"]))
+    if not conta_faf.empty:
+        for _, r in conta_faf.iterrows():
+            if r["conta_digitos"] and pd.notna(r.get("codigo_plano_acao")):
+                contas_index.append((r["conta_digitos"], "Fundo a Fundo", r["codigo_plano_acao"]))
+    if not conta_esp.empty:
+        for _, r in conta_esp.iterrows():
+            if r["conta_digitos"] and pd.notna(r.get("codigo_plano_acao")):
+                contas_index.append((r["conta_digitos"], "Transferências Especiais", r["codigo_plano_acao"]))
+    contas_index.sort(key=lambda x: len(x[0]), reverse=True)
+
+    def busca_substring_conta(nuconta_dig):
+        if len(nuconta_dig) < 4:
+            return None
+        for cod, fonte, ident in contas_index:
+            if len(cod) >= 4 and (cod in nuconta_dig or nuconta_dig in cod):
+                return fonte, ident
+        return None
+
+    def busca_objeto(objeto_siggo, nome):
+        if pd.isna(nome) or len(objeto_siggo) < 15:
+            return None
+        for tabela, fonte in ((benef_objeto_para_parceria, "Gestão de Parcerias"),
+                              (benef_objeto_para_faf, "Fundo a Fundo"),
+                              (benef_objeto_para_esp, "Transferências Especiais")):
+            if nome not in tabela.index:
+                continue
+            for ident, objeto_fonte in tabela.loc[nome]:
+                if len(objeto_fonte) >= 15 and (objeto_fonte in objeto_siggo or objeto_siggo in objeto_fonte):
+                    return fonte, ident
+        return None
+
+    # Extracao ANCORADA por palavra-chave dos numeros de identificacao citados
+    # no objeto (ex: "SICONV Nº 825427/2015") - NAO extrai qualquer sequencia
+    # de digitos do texto. Testado em 2026-09-17: extrair todo digito solto
+    # do objeto (ex: de um numero de emenda parlamentar como "43850001")
+    # gerava falso positivo por coincidencia numerica com um convenio real
+    # mas sem nenhuma relacao (3 de 4 casos testados eram falso positivo).
+    PADRAO_ID_OBJETO = re.compile(
+        r"(?:SICONV|CONV[EÊ]NIO|CONV\.|CONTRATO\s*DE\s*REPASSE|PARCERIA|PLANO\s*DE\s*A[CÇ][AÃ]O)"
+        r"\s*N?[ºO°]?\.?\s*[:\-]?\s*([\d./\-]{6,})",
+        re.IGNORECASE,
+    )
+
+    def extrair_ids_objeto(texto):
+        achados = []
+        for m in PADRAO_ID_OBJETO.finditer(str(texto).upper()):
+            digs = re.sub(r"\D", "", m.group(1))
+            if len(digs) >= 6:
+                achados.append(digs)
+        return achados
+
+    def busca_objeto_numerico(ids_extraidos):
+        for dig in ids_extraidos:
+            achado = busca_substring(dig)
+            if achado:
+                return achado
+        return None
+
+    t["nuconta_digitos"] = _so_digitos(t.get("NUCONTA", pd.Series(dtype=str)))
+    t["objeto_upper"] = t["TXOBJETORESUMIDO"].astype(str).str.upper().str.strip()
+    t["objeto_ids"] = t["TXOBJETORESUMIDO"].apply(extrair_ids_objeto)
 
     def cruzar(row):
+        # 1) Nº Convênio (chave exata)
         if row["nutransfsiafi_limpo"] != "0" and row["nutransfsiafi_limpo"] in nrs_siconv:
-            return pd.Series(["SICONV Legado", "Exata (nº convênio)", row["nutransfsiafi_limpo"]])
+            return pd.Series(["SICONV Legado", "1 - Nº Convênio", row["nutransfsiafi_limpo"]])
+
+        # 2) Substring (NUORIGINAL x identificador de qualquer fonte, incl. SICONV)
+        achado = busca_substring(row["nuoriginal_digitos"])
+        if achado:
+            fonte, cod = achado
+            return pd.Series([fonte, "2 - Substring (Nº Original)", cod])
+
+        # 3) Substring de conta bancária (NUCONTA)
+        achado_conta = busca_substring_conta(row["nuconta_digitos"])
+        if achado_conta:
+            fonte, cod = achado_conta
+            return pd.Series([fonte, "3 - Substring (Nº Conta)", cod])
+
+        # 4) Substring de Objeto (procura um nº SICONV/parceria/plano de ação
+        # embutido no texto do objeto do SIGGO)
+        achado_obj_num = busca_objeto_numerico(row["objeto_ids"])
+        if achado_obj_num:
+            fonte, cod = achado_obj_num
+            return pd.Series([fonte, "4 - Substring (Objeto)", cod])
+
         v = round(float(row["VATRANSFERENCIA"]), 2) if pd.notna(row["VATRANSFERENCIA"]) else 0
+        nome = row["nome_canonico_siggo"]
+        data_cel = row["DACELEBRACAO_fmt"]
+        ano_cel = row["ano_celebracao"]
+        ano_vig = row["ano_vigencia"]
+
+        # 5) Beneficiário + Data exata + Valor (só Fundo a Fundo tem data confiável)
+        if v > 0 and pd.notna(nome) and data_cel:
+            chave = (nome, data_cel, v)
+            if chave in benef_data_exata_valor_para_faf.index:
+                ids = benef_data_exata_valor_para_faf.loc[chave]
+                return pd.Series(["Fundo a Fundo", "5 - Beneficiário+Data+Valor", " | ".join(map(str, ids))])
+
+        # 6) Beneficiário + Ano + Valor
+        if v > 0 and pd.notna(nome):
+            for ano in {ano_cel, ano_vig} - {None}:
+                for tabela, fonte in ((benef_ano_valor_para_parceria, "Gestão de Parcerias"),
+                                      (benef_ano_valor_para_faf, "Fundo a Fundo"),
+                                      (benef_ano_valor_para_esp, "Transferências Especiais")):
+                    chave = (nome, ano, v)
+                    if chave in tabela.index:
+                        ids = tabela.loc[chave]
+                        return pd.Series([fonte, "6 - Beneficiário+Ano+Valor", " | ".join(map(str, ids))])
+
+        # 7) Beneficiário + Valor
+        if v > 0 and pd.notna(nome):
+            for tabela, fonte in ((benef_valor_para_parceria, "Gestão de Parcerias"),
+                                  (benef_valor_para_faf, "Fundo a Fundo"),
+                                  (benef_valor_para_esp, "Transferências Especiais")):
+                chave = (nome, v)
+                if chave in tabela.index:
+                    ids = tabela.loc[chave]
+                    return pd.Series([fonte, "7 - Beneficiário+Valor", " | ".join(map(str, ids))])
+
+        # 8) Beneficiário + Objeto (substring de texto, nao de numero)
+        achado_obj = busca_objeto(row["objeto_upper"], nome)
+        if achado_obj:
+            fonte, cod = achado_obj
+            return pd.Series([fonte, "8 - Beneficiário+Objeto", cod])
+
+        # 9) Valor apenas (sem beneficiário - ultimo recurso)
         if v > 0:
-            if v in valor_para_parceria.index:
-                ids = valor_para_parceria.loc[v]
-                return pd.Series(["Gestão de Parcerias", "Por valor", " | ".join(map(str, ids))])
-            if v in valor_para_faf.index:
-                ids = valor_para_faf.loc[v]
-                return pd.Series(["Fundo a Fundo", "Por valor", " | ".join(map(str, ids))])
-            if v in valor_para_esp.index:
-                ids = valor_para_esp.loc[v]
-                return pd.Series(["Transferências Especiais", "Por valor", " | ".join(map(str, ids))])
+            for tabela, fonte in ((valor_para_parceria, "Gestão de Parcerias"),
+                                  (valor_para_faf, "Fundo a Fundo"),
+                                  (valor_para_esp, "Transferências Especiais")):
+                if v in tabela.index:
+                    ids = tabela.loc[v]
+                    return pd.Series([fonte, "9 - Valor", " | ".join(map(str, ids))])
+
         return pd.Series(["Sem correspondência", "", ""])
 
+    t["DACELEBRACAO_fmt"] = fmt_data(t["DACELEBRACAO"])
     t[["encontrado_em", "confianca", "identificador"]] = t.apply(cruzar, axis=1)
 
+    nutransfsiafi_exibicao = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce")
     saida = pd.DataFrame({
         "Nº Transferência": t["NUTRANSFERENCIA"],
         "Espécie": t["especie"],
         "Beneficiário": t["beneficiario_fmt"],
         "Objeto": t["TXOBJETORESUMIDO"].astype(str).str.slice(0, 100),
+        "NUTRANSFSIAFI": nutransfsiafi_exibicao.where(nutransfsiafi_exibicao > 0, "").astype(str).replace("0.0", ""),
+        "NUORIGINAL": t["NUORIGINAL"],
         "Valor transferência (R$)": num(t["VATRANSFERENCIA"]),
         "Data de celebração": fmt_data(t["DACELEBRACAO"]),
         "Encontrado em": t["encontrado_em"],
@@ -921,6 +1197,7 @@ window.DADOS = {{}};
 window.COLUNAS = {{}};
 window.COLUNAS_NUM = {{}};
 window.ORDEM = {{}};
+window.LINHAS_ATUAIS = {{}};
 </script>
 
 {abas_conteudo}
@@ -945,12 +1222,23 @@ window.ORDEM = {{}};
   papel, não por espécie — testado e mais preciso (6 espécies como Auxílio/Subvenção/PDAF nunca aparecem como "União→GDF" na base
   inteira, mas Termo de Fomento tem alguns casos raros e legítimos que uma lista de espécies excluiria por engano). Esta aba ainda não
   foi cruzada com as demais (TransfereGov); serve para validação e exploração antes do cruzamento.<br><br>
-  <strong>Aba Cruzamento SIGGO×TransfereGov:</strong> para cada um dos 1.928 registros do SIGGO, tenta achar o instrumento
-  correspondente no TransfereGov, em ordem de confiança — <strong>(1) Exata:</strong> <code>NUTRANSFSIAFI</code> =
-  <code>NR_CONVENIO</code> no SICONV; <strong>(2) Por valor</strong> (heurística menos confiável, sujeita a falso positivo em
-  valores redondos/repetidos): <code>VATRANSFERENCIA</code> bate com o valor planejado/repassado em Gestão de Parcerias, Fundo a
-  Fundo ou Transferências Especiais. Resultado atual: 354 exatos (SICONV), 365+8+8 por valor (Gestão de Parcerias/Fundo a
-  Fundo/Especiais), 1.193 sem correspondência em nenhuma fonte extraída até agora.
+  <strong>Aba Cruzamento SIGGO×TransfereGov:</strong> para cada um dos registros do SIGGO, tenta achar o instrumento
+  correspondente no TransfereGov, sempre pela chave <strong>mais robusta disponível primeiro</strong>, em 9 camadas de confiança
+  decrescente: <strong>1 — Nº Convênio:</strong> <code>NUTRANSFSIAFI</code> = <code>NR_CONVENIO</code> no SICONV.
+  <strong>2 — Substring (Nº Original):</strong> os dígitos de <code>NUORIGINAL</code> contêm (ou estão contidos em) o
+  identificador de qualquer fonte (<code>NR_CONVENIO</code>/<code>cd_parceria</code>/<code>codigo_plano_acao</code>), exigindo
+  6+ dígitos em comum. <strong>3 — Substring (Nº Conta):</strong> os dígitos de <code>NUCONTA</code> contêm/estão contidos na
+  conta bancária cadastrada na fonte — exige 4+ dígitos em comum. <strong>4 — Substring (Objeto):</strong> procura, no texto do
+  <code>TXOBJETORESUMIDO</code>, um número citado logo após palavras-chave como "SICONV", "Convênio" ou "Parceria" (ex: "SICONV
+  Nº 825427/2015") e testa esse número contra os identificadores das fontes — não extrai qualquer sequência solta de dígitos do
+  texto, porque isso gerava falso positivo por coincidência numérica com números de emenda parlamentar (testado e corrigido em
+  2026-09-17). <strong>5 — Beneficiário+Data+Valor:</strong> nome oficial da UG
+  (via CNPJ, mesma fonte <code>UNIDADEGESTORA</code> dos dois lados) + data exata de vigência + valor — só Fundo a Fundo tem
+  data bem preenchida. <strong>6 — Beneficiário+Ano+Valor:</strong> mesmo nome + valor, só o ano precisa bater (Gestão de
+  Parcerias, Fundo a Fundo e Transferências Especiais). <strong>7 — Beneficiário+Valor:</strong> nome + valor, sem exigir data.
+  <strong>8 — Beneficiário+Objeto:</strong> nome + trecho de texto (não numérico) em comum entre os dois objetos, 15+
+  caracteres. <strong>9 — Valor:</strong> só o valor bate, sem nenhuma outra confirmação — a mais sujeita a falso positivo em
+  valores redondos/repetidos (ver memória <code>project_lacuna_saude_fundoafundo</code>).
 </div>
 
 <script>
@@ -958,6 +1246,7 @@ const DADOS = window.DADOS;
 const COLUNAS = window.COLUNAS;
 const COLUNAS_NUM = window.COLUNAS_NUM;
 const ORDEM = window.ORDEM;
+const LINHAS_ATUAIS = window.LINHAS_ATUAIS;
 
 function mostrarAba(id) {{
   document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.remove('ativo'));
@@ -968,6 +1257,7 @@ function mostrarAba(id) {{
 }}
 
 function renderizar(id, linhas) {{
+  LINHAS_ATUAIS[id] = linhas;
   const tbody = document.querySelector(`#tabela-${{id}} tbody`);
   const cols = COLUNAS[id];
   const numCols = COLUNAS_NUM[id] || [];
@@ -1069,7 +1359,8 @@ function ordenar(id, colIdx) {{
   const chave = cols[colIdx];
   ORDEM[id] = ORDEM[id] === chave ? null : chave;
   const asc = ORDEM[id] === chave;
-  const linhas = [...DADOS[id]].sort((a, b) => {{
+  const base = LINHAS_ATUAIS[id] || DADOS[id];
+  const linhas = [...base].sort((a, b) => {{
     let va = a[chave], vb = b[chave];
     const na = parseFloat(String(va).replace(/\\./g,'').replace(',','.'));
     const nb = parseFloat(String(vb).replace(/\\./g,'').replace(',','.'));

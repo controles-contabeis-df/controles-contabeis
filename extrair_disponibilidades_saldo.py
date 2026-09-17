@@ -48,7 +48,18 @@ base AS (
     SELECT
         s.COGESTAO          AS COGESTAO,
         s.COUG              AS COUG,
-        s.COFONTE           AS COFONTE,
+        /* Quando o COCONTACORRENTE começa com ano+"NE" (Nota de Empenho: AAAA+NE+seq, 11 caracteres)
+           e tem pelo menos 20 caracteres, os 9 dígitos seguintes (posições 12–20) trazem a fonte de
+           recurso embutida no próprio documento — validado 100% contra FONTERECURSO nos tipos 63 e 76.
+           Nesses casos a s.COFONTE bruta pode trazer a fonte de DESTINO do recurso (ex.: fonte do
+           IPREV que recebeu o repasse) em vez da fonte de origem da UG que fez o lançamento. Ver caso
+           DETRAN/IPREV (fontes 266000000/266100000 aparecendo indevidamente sob a UG 220201). */
+        CASE
+            WHEN REGEXP_LIKE(TRIM(TO_CHAR(s.COCONTACORRENTE)), '^[0-9]{4}NE')
+             AND LENGTH(TRIM(TO_CHAR(s.COCONTACORRENTE))) >= 20
+            THEN TO_NUMBER(SUBSTR(TRIM(TO_CHAR(s.COCONTACORRENTE)), 12, 9))
+            ELSE s.COFONTE
+        END                 AS COFONTE,
         s.COCONTACONTABIL,
         (s.VACREDITO - s.VADEBITO) AS VALOR_CONTABIL
     FROM {schema}VSALDOCONTABIL s

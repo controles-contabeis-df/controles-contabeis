@@ -34,8 +34,15 @@ def buscar_paginas(base_url: str, endpoint: str, params: dict, max_paginas: int 
     pagina = 1
     while pagina <= max_paginas:
         params_pagina = {**params, "pagina": pagina, "tamanho_da_pagina": 100}
-        resposta = requests.get(f"{base_url}/{endpoint}", params=params_pagina, timeout=30)
-        resposta.raise_for_status()
+        try:
+            resposta = requests.get(f"{base_url}/{endpoint}", params=params_pagina, timeout=30)
+            resposta.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            # Alguns registros individuais dao erro 500 persistente no lado da
+            # API publica (nao e transitorio) - pula esse registro em vez de
+            # derrubar a extracao inteira.
+            print(f"   [aviso] falha em {endpoint} {params_pagina}: {e}")
+            break
         corpo = resposta.json()
         dados = corpo.get("data", [])
         if not dados:
@@ -69,7 +76,7 @@ def extrair_parcerias():
     df_propostas = pd.DataFrame(propostas)
     salvar(df_propostas, "df_parcerias_proposta.csv")
 
-    parcerias, empenhos, documentos, pagamentos = [], [], [], []
+    parcerias, empenhos, documentos, pagamentos, contas = [], [], [], [], []
     ids_proposta = df_propostas["id_proposta"].dropna().unique() if not df_propostas.empty else []
 
     for i, id_proposta in enumerate(ids_proposta, start=1):
@@ -88,12 +95,16 @@ def extrair_parcerias():
                 id_dh = doc.get("id_documento_habil")
                 if id_dh:
                     pagamentos.extend(buscar_por_id(base, "ordem-pagamento", "id_documento_habil", id_dh))
+            # /parceria-conta traz a conta bancaria da parceria (tx_conta),
+            # usada para cruzamento por numero de conta com o SIGGO (NUCONTA).
+            contas.extend(buscar_por_id(base, "parceria-conta", "id_parceria", id_parceria))
         time.sleep(0.1)
 
     salvar(pd.DataFrame(parcerias), "df_parcerias_parceria.csv")
     salvar(pd.DataFrame(empenhos), "df_parcerias_empenho.csv")
     salvar(pd.DataFrame(documentos), "df_parcerias_documento_habil.csv")
     salvar(pd.DataFrame(pagamentos), "df_parcerias_ordem_pagamento.csv")
+    salvar(pd.DataFrame(contas), "df_parcerias_conta.csv")
 
 
 # ---------------------------------------------------------------------------
