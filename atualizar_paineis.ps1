@@ -55,6 +55,9 @@ Executar-Script "extrair_conciliacao_bens_moveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_intangiveis_sisgepat.py"
 Executar-Script "extrair_correspondencia_ativo_passivo.py"
 Executar-Script "extrair_correspondencia_ativo_passivo_saldo.py"
+Executar-Script "extrair_transferegov_df.py"
+Executar-Script "extrair_siggo_transferencia.py"
+Executar-Script "gerar_painel_transferegov_df.py"
 
 $env:NO_GIT_PUSH = ""
 

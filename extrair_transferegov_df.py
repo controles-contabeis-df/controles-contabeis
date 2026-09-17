@@ -76,6 +76,14 @@ def extrair_parcerias():
     df_propostas = pd.DataFrame(propostas)
     salvar(df_propostas, "df_parcerias_proposta.csv")
 
+    # /programa traz nm_ente_repassador - o orgao/ministerio concedente do
+    # programa (a proposta/parceria nao tem esse dado diretamente).
+    programas = []
+    ids_programa = df_propostas["id_programa"].dropna().unique() if not df_propostas.empty and "id_programa" in df_propostas.columns else []
+    for id_programa in ids_programa:
+        programas.extend(buscar_por_id(base, "programa", "id_programa", id_programa))
+    salvar(pd.DataFrame(programas), "df_parcerias_programa.csv")
+
     parcerias, empenhos, documentos, pagamentos, contas = [], [], [], [], []
     ids_proposta = df_propostas["id_proposta"].dropna().unique() if not df_propostas.empty else []
 
