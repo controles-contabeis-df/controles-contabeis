@@ -7,7 +7,7 @@ Cobre os 4 modulos:
   1. API Gestao de Parcerias  (convenios/parcerias novos - Plataforma+Brasil)
   2. API Transferencias Especiais (emendas parlamentares "transferencia especial")
   3. API Transferencias Fundo a Fundo (repasses diretos a fundos)
-  4. Dados SICONV legado (convenios antigos, via download CSV)
+  4. Discricionarias e Legais (CSVs do SICONV/Transferegov, via download)
 
 Gera um CSV por tabela relevante, todos salvos na mesma pasta deste script.
 Nao precisa de senha nem chave de API - sao dados abertos.
@@ -236,7 +236,7 @@ def extrair_fundoafundo():
 
 
 # ---------------------------------------------------------------------------
-# 4) SICONV legado (download CSV)
+# 4) Discricionarias e Legais (download CSV)
 # ---------------------------------------------------------------------------
 
 def baixar_csv_siconv(nome_arquivo: str, **kwargs) -> pd.DataFrame:
@@ -249,7 +249,7 @@ def baixar_csv_siconv(nome_arquivo: str, **kwargs) -> pd.DataFrame:
 
 
 def extrair_siconv_legado():
-    print("\n=== 4) SICONV LEGADO ===")
+    print("\n=== 4) DISCRICIONARIAS E LEGAIS (CSV SICONV) ===")
 
     print("   baixando siconv_proposta...")
     df_proposta = baixar_csv_siconv("siconv_proposta")
@@ -282,11 +282,34 @@ def extrair_siconv_legado():
 
 # ---------------------------------------------------------------------------
 
+def extrair_datas_atualizacao():
+    """Data da ultima atualizacao publicada por cada fonte (para o painel
+    mostrar a idade dos dados de origem)."""
+    print("\n=== DATAS DE ATUALIZACAO DAS FONTES ===")
+    base = "https://api-publica.transferegov.gestao.gov.br"
+    linhas = []
+    for nome, modulo in (("Gestão de Parcerias", "parcerias"), ("Transferências Especiais", "especiais"),
+                         ("Fundo a Fundo", "fundoafundo")):
+        try:
+            r = requests.get(f"{base}/{modulo}/data-atualizacao", timeout=30)
+            r.raise_for_status()
+            linhas.append({"fonte": nome, "atualizado_em": r.json().get("data_ultima_atualizacao")})
+        except Exception as e:
+            print(f"   [aviso] data-atualizacao {modulo}: {e}")
+    try:
+        df = baixar_csv_siconv("data_carga_siconv")
+        linhas.append({"fonte": "Discricionárias e Legais", "atualizado_em": str(df.iloc[0, 0]).strip()})
+    except Exception as e:
+        print(f"   [aviso] data_carga_siconv: {e}")
+    salvar(pd.DataFrame(linhas), "df_data_atualizacao_fontes.csv")
+
+
 def main():
     extrair_parcerias()
     extrair_especiais()
     extrair_fundoafundo()
     extrair_siconv_legado()
+    extrair_datas_atualizacao()
     print("\nExtracao concluida.")
 
 
