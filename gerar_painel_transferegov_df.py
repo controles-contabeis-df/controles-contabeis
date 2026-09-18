@@ -64,7 +64,23 @@ def carregar_cnpjs_gdf() -> set:
     return cnpjs
 
 
-CNPJS_GDF = carregar_cnpjs_gdf()
+# Entidades do GDF que o SICONV cadastra com CNPJ diferente do que consta em
+# UNIDADEGESTORA.NUCGC (ex.: a Secretaria de Turismo e a UG 310101 do SIGGo têm
+# CNPJ 33.143.334/0001-73, mas no SICONV aparece 05.589.348/0001-80). Achados
+# em 2026-09-18 conferindo a natureza jurídica "Administração Pública Estadual
+# ou do Distrito Federal" dos proponentes com UF=DF que ficavam fora da lista.
+# Ficaram de fora, por não serem do GDF: representações de outros estados em
+# Brasília e a "Secretaria de Articulação para o Desenvolvimento do Entorno".
+CNPJS_GDF_COMPLEMENTARES = {
+    "05589348000180": "SECRETARIA DE EST. DE TURISMO DO DISTRITO FEDERAL",
+    "16854222000101": "SECRETARIA ESPECIAL DA PROMOCAO DA IGUALDADE RACIAL DO DISTRITO FEDERAL",
+    # Empresas distritais que nao sao UG do SIGGo mas firmaram instrumentos
+    # com a Uniao; devem constar (transparencia/controle) mesmo se extintas.
+    "08911986000163": "EMPRESA BRASILIENSE DE TURISMO",
+    "00082024000137": "COMPANHIA DE SANEAMENTO AMBIENTAL DO DISTRITO FEDERAL",
+}
+
+CNPJS_GDF = carregar_cnpjs_gdf() | set(CNPJS_GDF_COMPLEMENTARES)
 
 
 def eh_gdf(serie_cnpj: pd.Series) -> pd.Series:
@@ -397,7 +413,7 @@ def montar_fundoafundo():
 
 
 # ---------------------------------------------------------------------------
-# 4) SICONV legado
+# 4) Discricionárias e Legais (CSVs do SICONV / Transferegov)
 # ---------------------------------------------------------------------------
 
 def montar_siconv():
@@ -629,6 +645,7 @@ def montar_cruzamento():
     cnpj_para_nome = cnpjs_gdf_df.drop_duplicates(subset="NUCGC").assign(
         NUCGC=lambda d: normalizar_cnpj(d["NUCGC"])
     ).set_index("NUCGC")["NOUG"].str.strip()
+    cnpj_para_nome = cnpj_para_nome.combine_first(pd.Series(CNPJS_GDF_COMPLEMENTARES))
 
     concedente_e_gdf = eh_gdf_qualquer_formato(t["COCONCENTE"], ugs_df)
     beneficiario_e_gdf = eh_gdf_qualquer_formato(t["COBENEFICIADO"], ugs_df)
@@ -674,7 +691,7 @@ def montar_cruzamento():
     # --- Fonte 1: SICONV (chave exata) ---
     convenio = carregar("df_siconv_convenio.csv", dtype={"NR_CONVENIO": str})
     proposta_sic = carregar("df_siconv_proposta.csv")
-    sic = convenio.merge(proposta_sic[["ID_PROPOSTA", "IDENTIF_PROPONENTE"]], on="ID_PROPOSTA", how="left")
+    sic = convenio.merge(proposta_sic[["ID_PROPOSTA", "IDENTIF_PROPONENTE", "CD_CONTA"]], on="ID_PROPOSTA", how="left")
     sic = sic[eh_gdf(sic["IDENTIF_PROPONENTE"])]
     nrs_siconv = set(sic["NR_CONVENIO"].dropna().astype(str).str.strip())
 
@@ -832,7 +849,7 @@ def montar_cruzamento():
     # parlamentar_plano_acao de Transferencias Especiais, sem nenhuma relacao
     # com codigo_plano_acao) - caso encontrado pela usuaria em 2026-09-17.
     digitos_esp_emenda = sorted(set(esp["emenda_digitos"].dropna()), key=len, reverse=True)
-    FONTES_SUBSTRING = ((digitos_siconv, "SICONV Legado"),
+    FONTES_SUBSTRING = ((digitos_siconv, "Discricionárias e Legais"),
                          (digitos_parceria, "Gestão de Parcerias"),
                          (digitos_faf, "Fundo a Fundo"),
                          (digitos_esp, "Transferências Especiais"),
@@ -851,6 +868,15 @@ def montar_cruzamento():
 
     # Indice de contas bancarias (digitos) para busca por substring com NUCONTA
     contas_index = []
+    # Conta bancaria do SICONV (CD_CONTA, em siconv_proposta): so a conta do
+    # convenio/CR do GDF, ate entao nao usada no cruzamento por conta.
+    # Comparacao EXATA (sem zeros a esquerda), nao por substring: testado em
+    # 2026-09-18, por substring so 51% dos casos eram coerentes em valor/ano
+    # (numeros curtos de conta "caem dentro" de contas longas do SIGGo); por
+    # igualdade exata, 99% (276 de 280).
+    conta_sic = sic.assign(conta_digitos=_so_digitos(sic["CD_CONTA"]).str.lstrip("0"))
+    conta_sic = conta_sic[conta_sic["conta_digitos"].str.len() >= 4]
+    conta_sic_exata = conta_sic.groupby("conta_digitos")["NR_CONVENIO"].apply(lambda s: sorted(set(s.str.strip())))
     if not conta_gp.empty:
         for _, r in conta_gp.iterrows():
             if r["conta_digitos"] and pd.notna(r.get("cd_parceria_str")):
@@ -918,6 +944,13 @@ def montar_cruzamento():
         return None
 
     t["nuconta_digitos"] = _so_digitos(t.get("NUCONTA", pd.Series(dtype=str)))
+    # Conta compartilhada: uma mesma conta usada por muitos registros do SIGGo
+    # (ex.: conta unica do Fundo de Saude, que recebe repasses de varios
+    # instrumentos) nao identifica um instrumento especifico. Testado em
+    # 2026-09-18: incluir a conta do SICONV fez o convenio 979160 "absorver" 36
+    # registros de Saude de anos diferentes - falso positivo. So vale o match por
+    # conta quando ela e usada por no maximo 5 registros (aditivos/parcelas).
+    t["nuconta_qtd"] = t.groupby(t["nuconta_digitos"].str.lstrip("0"))["NUTRANSFERENCIA"].transform("size")
     t["objeto_upper"] = t["TXOBJETORESUMIDO"].astype(str).str.upper().str.strip()
     t["objeto_ids"] = t["TXOBJETORESUMIDO"].apply(extrair_ids_objeto)
 
@@ -945,7 +978,7 @@ def montar_cruzamento():
     def cruzar(row):
         # 1) Nº SICONV/SIAFI (chave exata)
         if row["nutransfsiafi_limpo"] != "0" and row["nutransfsiafi_limpo"] in nrs_siconv:
-            return pd.Series(["SICONV Legado", "1 - Nº SICONV/SIAFI", row["nutransfsiafi_limpo"]])
+            return pd.Series(["Discricionárias e Legais", "1 - Nº SICONV/SIAFI", row["nutransfsiafi_limpo"]])
 
         # 2) Substring (NUORIGINAL x identificador de qualquer fonte, incl. SICONV)
         achado = busca_substring(row["nuoriginal_digitos"])
@@ -954,7 +987,13 @@ def montar_cruzamento():
             return pd.Series([fonte, "2 - Substring (Nº Original)", cod])
 
         # 3) Substring de conta bancária (NUCONTA)
-        achado_conta = busca_substring_conta(row["nuconta_digitos"])
+        achado_conta = None
+        if row["nuconta_qtd"] <= 5:
+            nc = row["nuconta_digitos"].lstrip("0")
+            if nc in conta_sic_exata.index and len(conta_sic_exata.loc[nc]) == 1:
+                achado_conta = ("Discricionárias e Legais", conta_sic_exata.loc[nc][0])
+            else:
+                achado_conta = busca_substring_conta(row["nuconta_digitos"])
         if achado_conta:
             fonte, cod = achado_conta
             return pd.Series([fonte, "3 - Substring (Conta Banc.)", cod])
@@ -1072,7 +1111,7 @@ def montar_cruzamento():
         return re.sub(r"\D", "", str(s))
 
     universo_fontes = {
-        "SICONV Legado": nrs_siconv,
+        "Discricionárias e Legais": nrs_siconv,
         "Gestão de Parcerias": set(gp_valido["cd_parceria_str"].dropna()),
         "Fundo a Fundo": set(faf["codigo_plano_acao"].dropna()),
         "Transferências Especiais": set(esp["codigo_plano_acao"].dropna()),
@@ -1115,7 +1154,7 @@ ORDEM_CAMADAS = [
 # (valor pago/repassado - registros ainda nao celebrados ou com valor zerado
 # ficam de fora, por serem fase inicial e nao representarem pendencia real).
 FONTE_TAB_INFO = {
-    "SICONV Legado": {"aba": "siconv", "id_col": "Nº Convênio", "valor_col": "Valor pago (R$)"},
+    "Discricionárias e Legais": {"aba": "siconv", "id_col": "Nº Convênio", "valor_col": "Valor pago (R$)"},
     "Gestão de Parcerias": {"aba": "parcerias", "id_col": "Nº Parceria", "valor_col": "Valor repassado (R$)"},
     "Fundo a Fundo": {"aba": "fundoafundo", "id_col": "Nº Plano de Ação", "valor_col": "Valor pago (R$)"},
     "Transferências Especiais": {"aba": "especiais", "id_col": "Nº Plano de Ação", "valor_col": "Valor pago (R$)"},
@@ -1131,7 +1170,7 @@ COR_SEM_MATCH = "#c0392b"
 
 # Paleta categorica fixa (mesma ordem sempre) para as 4 fontes do TransfereGov.
 CORES_FONTE = {
-    "SICONV Legado": "#0d1b3e",
+    "Discricionárias e Legais": "#0d1b3e",
     "Gestão de Parcerias": "#0090a8",
     "Fundo a Fundo": "#f0a500",
     "Transferências Especiais": "#1a7a44",
@@ -1347,8 +1386,8 @@ ABAS = [
     {"id": "fundoafundo", "titulo": "Fundo a Fundo", "icone": "💰",
      "fonte": "API /fundoafundo — endpoint /planos-acao + cadeia dados bancários→lançamentos→subtransações",
      "coluna_ente": "Beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
-    {"id": "siconv", "titulo": "SICONV Legado", "icone": "📄",
-     "fonte": "Download CSV — siconv_convenio.csv + siconv_proposta.csv + siconv_emenda.csv",
+    {"id": "siconv", "titulo": "Discricionárias e Legais", "icone": "📄",
+     "fonte": "Download CSV \"Transferências Discricionárias e Legais\" (Transferegov) — siconv_convenio + siconv_proposta + siconv_emenda: convênios, contratos de repasse e termos de compromisso",
      "coluna_ente": "Beneficiário", "coluna_valor_kpi": "Valor pago (R$)"},
     {"id": "siggo", "titulo": "SIGGO", "icone": "🗄️",
      "fonte": "Oracle SIGGO — MIL2026.TRANSFERENCIA + MIL2026.UNIDADEGESTORA (ainda não cruzado com o TransfereGov)",
@@ -1538,7 +1577,27 @@ def montar_tabela_html(df: pd.DataFrame, aba_id: str, params: dict) -> str:
     """
 
 
+ABA_PARA_FONTE = {"parcerias": "Gestão de Parcerias", "especiais": "Transferências Especiais",
+                  "fundoafundo": "Fundo a Fundo", "siconv": "Discricionárias e Legais"}
+
+
+def carregar_datas_atualizacao() -> dict:
+    """Ultima atualizacao publicada por cada fonte de origem (gerada em
+    extrair_transferegov_df.py) - mostra a idade dos dados no painel."""
+    try:
+        df = carregar("df_data_atualizacao_fontes.csv", dtype=str)
+    except FileNotFoundError:
+        return {}
+    out = {}
+    for _, r in df.iterrows():
+        dt = pd.to_datetime(r["atualizado_em"], dayfirst="/" in str(r["atualizado_em"]), errors="coerce")
+        if pd.notna(dt):
+            out[r["fonte"]] = dt.strftime("%d/%m/%Y %H:%M") if (dt.hour or dt.minute) else dt.strftime("%d/%m/%Y")
+    return out
+
+
 def main():
+    datas_fonte = carregar_datas_atualizacao()
     cruzamento_df, cruzamento_params, cobertura_fontes = montar_cruzamento()
     resultados = {
         "parcerias": montar_parcerias(),
@@ -1583,10 +1642,12 @@ def main():
         else:
             filtros_html = montar_filtros(df, aid)
         tabela_html = montar_tabela_html(df, aid, parametros[aid])
+        dt_fonte = datas_fonte.get(ABA_PARA_FONTE.get(aid, ""))
+        atualizado = f" — dados de origem atualizados em {dt_fonte}" if dt_fonte else ""
 
         conteudo_html.append(f"""
         <section class="aba-conteudo {ativo}" id="conteudo-{aid}">
-          <p class="fonte-info">Fonte: {aba['fonte']}</p>
+          <p class="fonte-info">Fonte: {aba['fonte']}{atualizado}</p>
           {filtros_html}
           {tabela_html}
         </section>
@@ -1739,6 +1800,13 @@ window.LINHAS_ATUAIS = {{}};
   filtro de CNPJ já os elimine na prática (é um instrumento exclusivo com OSCs). Campo <strong>Valor pago</strong> segue as
   regras de cálculo usadas pelo setor de Transparência/Governo Aberto do DF (cadeia de tabelas por fonte). Fonte dos dados:
   <code>https://api-publica.transferegov.gestao.gov.br/</code>.<br><br>
+  <strong>Aba Discricionárias e Legais:</strong> vem dos CSVs "Transferências Discricionárias e Legais" do Transferegov
+  (<code>siconv_convenio</code>, <code>siconv_proposta</code> e <code>siconv_emenda</code>), que reúnem convênios, contratos de
+  repasse e termos de compromisso — não apenas o SICONV legado. Dos 65 arquivos disponibilizados, os demais trazem detalhamentos
+  (desembolsos, aditivos, licitações, obras etc.) sem novos instrumentos, conferido em 2026-09-18. Foram incluídas, por CNPJ
+  complementar, a Secretaria de Turismo e a Secretaria Especial da Promoção da Igualdade Racial do DF (que o SICONV cadastra
+  com CNPJ diferente do constante no SIGGo), além da Empresa Brasiliense de Turismo e da Caesb, empresas distritais que não são
+  UG do SIGGo mas firmaram instrumentos com a União e devem constar para fins de transparência e controle, ainda que extintas.<br><br>
   <strong>Aba SIGGO:</strong> de 18.624 registros de <code>MIL2026.TRANSFERENCIA</code>, mostra só os <strong>1.823</strong> em que
   o concedente NÃO é o GDF e o beneficiário É o GDF — ou seja, recurso externo (essencialmente da União) recebido pelo GDF, excluindo
   os 16.512 casos em que o próprio GDF é concedente (a órgãos privados/OSCs ou a si mesmo), os 88 casos intra-GDF, e 105 casos em que o
@@ -1760,7 +1828,11 @@ window.LINHAS_ATUAIS = {{}};
   caso real encontrado pela usuária: NUORIGINAL "202443780013" batia com o Nº da Emenda Parlamentar, não com o código do
   plano de ação), exigindo 6+ dígitos em comum. <strong>3 — Substring (Conta Banc.):</strong> os dígitos de <code>NUCONTA</code> contêm/estão contidos na
   conta bancária cadastrada na fonte (inclui, no Fundo a Fundo, tanto a conta de <code>planos-acao-dados-bancarios</code> quanto a de
-  <code>gestao-financeira-lancamentos</code>) — exige 4+ dígitos em comum. <strong>4 — Substring (Objeto):</strong> procura, no texto do
+  <code>gestao-financeira-lancamentos</code>) — exige 4+ dígitos em comum. Para Discricionárias e Legais compara a conta do proponente no SICONV
+  (<code>CD_CONTA</code>, de <code>siconv_proposta</code>) por <strong>igualdade exata</strong> (testado: por substring só 51% dos casos eram
+  coerentes em valor/ano; por igualdade exata, 99%). Só vale quando a conta é usada por no máximo 5 registros do SIGGo — contas
+  compartilhadas, como a conta única do Fundo de Saúde, não identificam um instrumento (sem essa trava, um único convênio "absorvia" 36
+  registros de Saúde de anos diferentes). <strong>4 — Substring (Objeto):</strong> procura, no texto do
   <code>TXOBJETORESUMIDO</code>, um número citado logo após palavras-chave como "SICONV", "Convênio", "Parceria" ou "Emenda" (ex: "SICONV
   Nº 825427/2015") e testa esse número contra os identificadores das fontes — não extrai qualquer sequência solta de dígitos do
   texto, porque isso gerava falso positivo por coincidência numérica com números de emenda parlamentar (testado e corrigido em
