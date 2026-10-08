@@ -47,7 +47,26 @@ def carregar_com_colunas(nome, colunas, **kwargs):
 
 
 def num(serie):
+    """Converte para numero aceitando a virgula decimal dos CSVs do SICONV
+    (ex.: "1689026,29"). Antes valores com virgula viravam 0 - corrigido em
+    2026-10-08 (afetava ~1.000 valores globais e ~550 desembolsos)."""
+    if hasattr(serie, "dtype") and not pd.api.types.is_numeric_dtype(serie):
+        serie = serie.astype(str).str.replace(",", ".", regex=False)
     return pd.to_numeric(serie, errors="coerce").fillna(0)
+
+
+def chave_id(valor) -> str:
+    """Forma canonica de um identificador para comparacao entre SIGGo e as
+    origens: sem espacos, hifen ou ponto, maiusculo, sem zeros a esquerda;
+    "" se for vazio, so zeros ou conter outros caracteres (ex.: "05/2026").
+    NUTRANSFSIAFI virou CHAR(21) e passou a aceitar codigos com hifen e
+    alfanumericos (ex.: plano do Fundo a Fundo 14-6, convenio 7AAGVU)."""
+    if valor is None or (isinstance(valor, float) and pd.isna(valor)):
+        return ""
+    t = re.sub(r"[\s\-\.]", "", str(valor)).upper()
+    if not t.isalnum():
+        return ""
+    return t.lstrip("0")
 
 
 def normalizar_cnpj(serie):
@@ -366,7 +385,7 @@ def montar_fundoafundo():
         "Ano": "ano(data_inicio_vigencia_plano_acao)",
         "Valor global (R$)": "plano_acao.valor_total_plano_acao",
         "Valor repassado (R$)": "plano_acao.valor_total_repasse_plano_acao",
-        "Valor pago (R$)": "Σ subtransações.valor_subtransacao_gestao_financeira",
+        "Valor pago (R$)": "Σ subtransações.valor_subtransacao_gestao_financeira das contas do plano; conta compartilhada por mais de um plano é rateada pelo valor do repasse",
     }
     if plano.empty:
         return pd.DataFrame(columns=colunas), params
@@ -382,18 +401,32 @@ def montar_fundoafundo():
         origem_por_conta = lanc.groupby("id_agencia_conta")["descricao_origem_solicitacao_gestao_financeira"].agg(
             lambda s: s.dropna().iloc[0] if s.dropna().size else ""
         )
-        db = dados_bancarios.copy()
-        db["valor_pago_conta"] = db["id_agencia_conta"].map(lanc_por_conta).fillna(0)
+        # Uma mesma conta pode servir a varios planos (7 contas / 15 dos 57
+        # planos em 2026-10) e o lancamento nao indica o plano: antes cada plano
+        # recebia a conta INTEIRA e o total (R$ 851,9 mi) passava em R$ 326,9 mi
+        # o pago real (R$ 525,0 mi). Agora: (plano, conta) sem duplicata e o pago
+        # da conta e rateado entre os planos que a usam, proporcional ao valor
+        # do repasse (igual se nao houver repasse) - a soma fecha com o total.
+        db = dados_bancarios.drop_duplicates(["id_plano_acao", "id_agencia_conta"]).copy()
+        db = db.merge(plano[["id_plano_acao", "valor_total_repasse_plano_acao"]], on="id_plano_acao", how="left")
+        db["_rep"] = num(db["valor_total_repasse_plano_acao"])
+        db["_n"] = db.groupby("id_agencia_conta")["id_plano_acao"].transform("nunique")
+        soma_rep = db.groupby("id_agencia_conta")["_rep"].transform("sum")
+        db["_peso"] = (db["_rep"] / soma_rep).where(soma_rep > 0, 1 / db["_n"])
+        db["valor_pago_conta"] = db["id_agencia_conta"].map(lanc_por_conta).fillna(0) * db["_peso"]
         db["origem_conta"] = db["id_agencia_conta"].map(origem_por_conta).fillna("")
         valor_pago_por_plano = db.groupby("id_plano_acao")["valor_pago_conta"].sum()
         origem_por_plano = db.groupby("id_plano_acao")["origem_conta"].agg(lambda s: s[s != ""].iloc[0] if (s != "").any() else "")
+        contas_compart_por_plano = db.groupby("id_plano_acao")["_n"].max()
     else:
         valor_pago_por_plano = pd.Series(dtype=float)
         origem_por_plano = pd.Series(dtype=str)
+        contas_compart_por_plano = pd.Series(dtype=float)
 
     plano = plano[eh_gdf(plano["cnpj_ente_recebedor_plano_acao"])].copy()
     plano["valor_pago"] = plano["id_plano_acao"].map(valor_pago_por_plano).fillna(0)
     plano["origem"] = plano["id_plano_acao"].map(origem_por_plano).fillna("")
+    plano["planos_na_conta"] = plano["id_plano_acao"].map(contas_compart_por_plano).fillna(1).astype(int)
 
     saida = pd.DataFrame({
         "Nº Plano de Ação": plano["codigo_plano_acao"],
@@ -563,12 +596,13 @@ def montar_siggo():
     tem_nome_coug = nome_coug.notna()
     t.loc[tem_nome_coug, "coug_fmt"] = nome_coug[tem_nome_coug] + " (" + coug_str[tem_nome_coug] + ")"
 
-    nutransfsiafi = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce")
+    nutransfsiafi = t["NUTRANSFSIAFI"].astype(str).str.strip()
+    nutransfsiafi = nutransfsiafi.where(nutransfsiafi.map(chave_id) != "", "")
 
     saida = pd.DataFrame({
         "Nº Transferência": t["NUTRANSFERENCIA"],
         "Espécie": t["especie"],
-        "Nº SICONV/SIAFI": nutransfsiafi.where(nutransfsiafi > 0, "").astype(str).replace("0.0", ""),
+        "Nº SICONV/SIAFI": nutransfsiafi,
         "Nº Original": t["NUORIGINAL"],
         "Concedente": t["COCONCENTE"],
         "Beneficiário": t["beneficiario_fmt"],
@@ -620,7 +654,7 @@ def montar_cruzamento():
     """
     t = carregar("df_siggo_transferencia.csv")
     colunas = ["Nº Transf.", "Espécie", "Concedente", "Beneficiário", "Objeto", "Data Celeb.", "Valor (R$)",
-               "Nº SICONV/SIAFI", "Nº Original", "Encontrado em", "Confiança", "Indicador"]
+               "Nº SICONV/SIAFI", "Nº Original", "Encontrado em", "Confiança", "Indicador", "Sugestão p/ NUTRANSFSIAFI"]
     params = {
         "Nº Transf.": "TRANSFERENCIA.NUTRANSFERENCIA",
         "Espécie": "TRANSFERENCIA.INESPECIE",
@@ -634,6 +668,7 @@ def montar_cruzamento():
         "Encontrado em": "resultado do cruzamento (ver metodologia no rodapé)",
         "Confiança": "ver hierarquia de camadas no rodapé (Nº SICONV/SIAFI > substrings > soma NDx > benef.+data/ano/valor > benef.+objeto)",
         "Indicador": "NR_CONVENIO / cd_parceria / codigo_plano_acao, conforme a fonte",
+        "Sugestão p/ NUTRANSFSIAFI": "valor que a UG deve cadastrar no NUTRANSFSIAFI: identificador do instrumento candidato, sem hífen e sem pontos (camadas 2 a 5; nas 7 a 9, a confirmar)",
     }
     if t.empty:
         return pd.DataFrame(columns=colunas), params
@@ -683,7 +718,7 @@ def montar_cruzamento():
     # 202500042786 (recebedor = FUNDO DE SAUDE DO DISTRITO FEDERAL na API).
     coug_str = t["COUG"].astype(str).str.replace(r"\.0$", "", regex=True).str.strip()
     t["nome_canonico_coug"] = coug_str.map(ug_nome)
-    t["nutransfsiafi_limpo"] = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce").fillna(0).astype("int64").astype(str)
+    t["nutransfsiafi_limpo"] = t["NUTRANSFSIAFI"].map(chave_id)
     t["nuoriginal_digitos"] = _so_digitos(t["NUORIGINAL"])
     t["ano_celebracao"] = extrair_ano(t["DACELEBRACAO"])
     t["ano_vigencia"] = extrair_ano(t["DAINIVIGENCIA"])
@@ -840,6 +875,21 @@ def montar_cruzamento():
     # Fundo/Especiais, e por isso perdia casos como NUTRANSFERENCIA 31017
     # (NUORIGINAL "CONVÊNIO 941097/2023" deveria ter batido com o Nº Convênio
     # 941097 do SICONV, mas o SICONV nunca era testado nessa busca).
+    # Camada 1 generalizada: NUTRANSFSIAFI virou CHAR(21) e pode trazer o
+    # identificador de qualquer origem (convenio 6 car., parceria 12 digitos,
+    # plano de acao com hifen ou sem). Dicionario: chave normalizada -> (fonte,
+    # identificador original). Em colisao entre fontes (nao ocorre hoje) vale a
+    # primeira, na ordem SICONV, Parcerias, Fundo a Fundo, Especiais.
+    mapa_chave_id = {}
+    for fonte_id, ids_id in (("Discricionárias e Legais", nrs_siconv),
+                             ("Gestão de Parcerias", gp["cd_parceria_str"].dropna()),
+                             ("Fundo a Fundo", faf["codigo_plano_acao"].dropna()),
+                             ("Transferências Especiais", esp["codigo_plano_acao"].dropna())):
+        for ident in ids_id:
+            k = chave_id(ident)
+            if k and k not in mapa_chave_id:
+                mapa_chave_id[k] = (fonte_id, str(ident).strip())
+
     digitos_siconv = sorted(nrs_siconv, key=len, reverse=True)
     digitos_parceria = sorted(set(gp["cd_parceria_str"].dropna()), key=len, reverse=True)
     digitos_faf = sorted(set(faf["codigo_digitos"].dropna()), key=len, reverse=True)
@@ -976,9 +1026,10 @@ def montar_cruzamento():
         t.loc[tem_sufixo_nd, "soma_grupo_nd"] = soma_por_linha
 
     def cruzar(row):
-        # 1) Nº SICONV/SIAFI (chave exata)
-        if row["nutransfsiafi_limpo"] != "0" and row["nutransfsiafi_limpo"] in nrs_siconv:
-            return pd.Series(["Discricionárias e Legais", "1 - Nº SICONV/SIAFI", row["nutransfsiafi_limpo"]])
+        # 1) Nº SICONV/SIAFI = identificador de qualquer origem (chave exata)
+        if row["nutransfsiafi_limpo"] in mapa_chave_id:
+            fonte_1, ident_1 = mapa_chave_id[row["nutransfsiafi_limpo"]]
+            return pd.Series([fonte_1, "1 - Nº SICONV/SIAFI", ident_1])
 
         # 2) Substring (NUORIGINAL x identificador de qualquer fonte, incl. SICONV)
         achado = busca_substring(row["nuoriginal_digitos"])
@@ -1083,7 +1134,28 @@ def montar_cruzamento():
     t["DACELEBRACAO_fmt"] = fmt_data(t["DACELEBRACAO"])
     t[["encontrado_em", "confianca", "identificador"]] = t.apply(cruzar, axis=1)
 
-    nutransfsiafi_exibicao = pd.to_numeric(t["NUTRANSFSIAFI"], errors="coerce")
+    # Sugestao de preenchimento do NUTRANSFSIAFI (2026-10-08): quando a camada 1
+    # nao identificou mas ha candidato unico, mostra o identificador do
+    # instrumento no formato da IN (sem hifen/pontos, mantendo zeros), para a UG
+    # saber o que cadastrar. Camadas 7 a 9 sao semelhanca: "a confirmar".
+    def sugerir(row):
+        m = re.match(r"^(\d+)", str(row["confianca"]))
+        if not m or m.group(1) == "1":
+            return ""
+        partes = [x for x in str(row["identificador"]).split(" | ") if x.strip()]
+        if len(partes) != 1 or chave_id(partes[0]) not in mapa_chave_id:
+            return ""
+        valor = re.sub(r"[\s\-\.]", "", mapa_chave_id[chave_id(partes[0])][1])
+        if m.group(1) in ("7", "8", "9"):
+            valor += " (a confirmar)"
+        if row["nutransfsiafi_limpo"]:
+            valor += " (campo já tem outro valor)"
+        return valor
+
+    t["sugestao_nutransfsiafi"] = t.apply(sugerir, axis=1)
+
+    nutransfsiafi_exibicao = t["NUTRANSFSIAFI"].astype(str).str.strip()
+    nutransfsiafi_exibicao = nutransfsiafi_exibicao.where(nutransfsiafi_exibicao.map(chave_id) != "", "")
     encontrado_em_exibicao = t["encontrado_em"].replace("Sem correspondência", "-")
     saida = pd.DataFrame({
         "Nº Transf.": t["NUTRANSFERENCIA"],
@@ -1093,45 +1165,53 @@ def montar_cruzamento():
         "Objeto": t["TXOBJETORESUMIDO"].astype(str).str.slice(0, 100),
         "Data Celeb.": fmt_data(t["DACELEBRACAO"]),
         "Valor (R$)": num(t["VATRANSFERENCIA"]),
-        "Nº SICONV/SIAFI": nutransfsiafi_exibicao.where(nutransfsiafi_exibicao > 0, "").astype(str).replace("0.0", ""),
+        "Nº SICONV/SIAFI": nutransfsiafi_exibicao,
         "Nº Original": t["NUORIGINAL"],
         "Encontrado em": encontrado_em_exibicao,
         "Confiança": t["confianca"].replace("", "-"),
         "Indicador": t["identificador"],
+        "Sugestão p/ NUTRANSFSIAFI": t["sugestao_nutransfsiafi"],
     })
 
-    # Cobertura por fonte: de cada identificador que EXISTE na fonte (ex: cada
-    # Nº de Convênio do SICONV com proponente GDF), quantos foram de fato
-    # localizados em algum registro do SIGGO (usado como "Indicador" em pelo
-    # menos uma linha do cruzamento) - usado na aba Resumo. Compara por
-    # digitos apenas (ignora "-"/"." etc.) porque alguns identificadores sao
-    # salvos ora com traco (ex: "00905320250002-021705"), ora sem (quando vem
-    # de busca por substring, que usa so digitos) - normaliza os dois lados.
-    def _so_digitos_id(s):
-        return re.sub(r"\D", "", str(s))
-
+    # Cobertura por fonte: de cada identificador que EXISTE na fonte, o
+    # instrumento so e "localizado" quando o NUTRANSFSIAFI de algum registro do
+    # SIGGo e igual a ele (camada 1) - decisao da usuaria em 2026-10-08: o
+    # campo foi ampliado (CHAR 21) justamente para as UGs cadastrarem o
+    # identificador ali, e a falta desse cadastro tambem deve aparecer. As
+    # camadas 2 a 9 (Nº Original, conta, objeto, soma, beneficiario+valor...)
+    # nao identificam: viram apenas "candidato" para conferencia. Compara pela
+    # chave canonica (chave_id) nos dois lados.
     universo_fontes = {
         "Discricionárias e Legais": nrs_siconv,
         "Gestão de Parcerias": set(gp_valido["cd_parceria_str"].dropna()),
         "Fundo a Fundo": set(faf["codigo_plano_acao"].dropna()),
         "Transferências Especiais": set(esp["codigo_plano_acao"].dropna()),
     }
+    camada_num = saida["Confiança"].str.extract(r"^(\d+)")[0]
     cobertura_fontes = {}
     for fonte, ids_fonte in universo_fontes.items():
-        usados_dig = set()
-        for val in saida.loc[saida["Encontrado em"] == fonte, "Indicador"].dropna():
-            for parte in str(val).split(" | "):
-                d = _so_digitos_id(parte)
-                if d:
-                    usados_dig.add(d)
-        ids_originais_validos = {x for x in ids_fonte if _so_digitos_id(x)}
-        nao_localizados_originais = {x for x in ids_originais_validos if _so_digitos_id(x) not in usados_dig}
-        localizados = len(ids_originais_validos) - len(nao_localizados_originais)
+        forte, forte_raw, candidatos = {}, {}, {}
+        da_fonte = saida["Encontrado em"] == fonte
+        for _, r in saida.loc[da_fonte & camada_num.notna(), ["Nº Transf.", "Indicador", "Nº SICONV/SIAFI"]].assign(c=camada_num).dropna(subset=["Indicador"]).iterrows():
+            for parte in str(r["Indicador"]).split(" | "):
+                k = chave_id(parte)
+                if not k:
+                    continue
+                if r["c"] == "1":
+                    forte.setdefault(k, []).append(str(r["Nº Transf."]))
+                    forte_raw.setdefault(k, []).append(str(r["Nº SICONV/SIAFI"]).strip())
+                else:
+                    candidatos.setdefault(k, []).append(f'{r["Nº Transf."]} (camada {r["c"]})')
+        validos = {x for x in ids_fonte if chave_id(x)}
+        nao_forte = {x for x in validos if chave_id(x) not in forte}
         cobertura_fontes[fonte] = {
-            "total_fonte": len(ids_originais_validos),
-            "localizados": localizados,
-            "nao_localizados": len(nao_localizados_originais),
-            "ids_nao_localizados": nao_localizados_originais,
+            "total_fonte": len(validos),
+            "localizados": len(validos) - len(nao_forte),
+            "nao_localizados": len(nao_forte),
+            "ids_nao_localizados": nao_forte,
+            "ids_localizados": {x: forte[chave_id(x)] for x in validos if chave_id(x) in forte},
+            "nutransfsiafi_localizados": {x: sorted(set(forte_raw[chave_id(x)])) for x in validos if chave_id(x) in forte_raw},
+            "candidatos_semelhanca": {x: sorted(set(candidatos[chave_id(x)])) for x in nao_forte if chave_id(x) in candidatos},
         }
 
     return saida.sort_values("Nº Transf.", ascending=False), params, cobertura_fontes
@@ -1189,25 +1269,33 @@ def _barra_resumo(label, largura_pct, texto_valor, cor):
 
 def montar_resumo(cruzamento: pd.DataFrame, cobertura_fontes: dict, dados_fontes: dict):
     total = len(cruzamento)
-    com_match = int((cruzamento["Encontrado em"] != "-").sum())
-    sem_match = total - com_match
+    # Tres situacoes de cada registro do SIGGo (2026-10-08): IDENTIFICADO = o
+    # NUTRANSFSIAFI traz o identificador do instrumento (camada 1); SO CANDIDATO
+    # = so ha pista (camadas 2 a 9: Nº Original, conta, objeto, soma,
+    # beneficiario+valor...), ou seja, a UG ainda nao cadastrou o identificador;
+    # SEM CORRESPONDENCIA = nem pista.
+    camada = cruzamento["Confiança"].astype(str).str.extract(r"^(\d+)")[0]
+    identificado = camada == "1"
+    candidato = camada.notna() & ~identificado
+    sem_corr = camada.isna()
+    n_ident, n_cand, n_sem = int(identificado.sum()), int(candidato.sum()), int(sem_corr.sum())
     valor_total = float(cruzamento["Valor (R$)"].sum())
-    valor_com_match = float(cruzamento.loc[cruzamento["Encontrado em"] != "-", "Valor (R$)"].sum())
-    taxa = (com_match / total * 100) if total else 0
-    taxa_valor = (valor_com_match / valor_total * 100) if valor_total else 0
+    valor_ident = float(cruzamento.loc[identificado, "Valor (R$)"].sum())
+    valor_cand = float(cruzamento.loc[candidato, "Valor (R$)"].sum())
+    pct = lambda a, b: (f"{(a / b * 100):.1f}".replace(".", ",") if b else "0,0")
 
     def fmt_int(n):
         return f"{n:,}".replace(",", ".")
 
-    taxa_fmt = f"{taxa:.1f}".replace(".", ",")
-    taxa_valor_fmt = f"{taxa_valor:.1f}".replace(".", ",")
     kpis_html = f"""
     <div class="krow">
       <div class="kpi"><div class="kl">Registros no SIGGO (aba Cruzamento)</div><div class="kv">{fmt_int(total)}</div></div>
-      <div class="kpi ko"><div class="kl">Com correspondência no TransfereGov</div><div class="kv">{fmt_int(com_match)} ({taxa_fmt}%)</div></div>
-      <div class="kpi ka"><div class="kl">Sem correspondência</div><div class="kv">{fmt_int(sem_match)}</div></div>
+      <div class="kpi ko"><div class="kl">Identificados (NUTRANSFSIAFI = identificador)</div><div class="kv">{fmt_int(n_ident)} ({pct(n_ident, total)}%)</div></div>
+      <div class="kpi kw"><div class="kl">Só candidato (identificador não cadastrado)</div><div class="kv">{fmt_int(n_cand)} ({pct(n_cand, total)}%)</div></div>
+      <div class="kpi ka"><div class="kl">Sem correspondência</div><div class="kv">{fmt_int(n_sem)} ({pct(n_sem, total)}%)</div></div>
       <div class="kpi"><div class="kl">Valor total (R$)</div><div class="kv">{fmt_valor(valor_total)}</div></div>
-      <div class="kpi ko"><div class="kl">Valor com correspondência</div><div class="kv">{fmt_valor(valor_com_match)} ({taxa_valor_fmt}%)</div></div>
+      <div class="kpi ko"><div class="kl">Valor identificado (R$)</div><div class="kv">{fmt_valor(valor_ident)} ({pct(valor_ident, valor_total)}%)</div></div>
+      <div class="kpi kw"><div class="kl">Valor só candidato (R$)</div><div class="kv">{fmt_valor(valor_cand)} ({pct(valor_cand, valor_total)}%)</div></div>
     </div>
     """
 
@@ -1284,8 +1372,7 @@ def montar_resumo(cruzamento: pd.DataFrame, cobertura_fontes: dict, dados_fontes
     # repassado (>0): quem ainda nao foi celebrado, ou foi celebrado mas com
     # valor zerado, esta em fase inicial e nao representa pendencia real de
     # regularizacao no SIGGO.
-    def _so_digitos_id(s):
-        return re.sub(r"\D", "", str(s))
+    _so_digitos_id = chave_id
 
     linhas_pendentes = []
     for fonte, info in FONTE_TAB_INFO.items():
@@ -1296,57 +1383,84 @@ def montar_resumo(cruzamento: pd.DataFrame, cobertura_fontes: dict, dados_fontes
         if df_fonte is None or df_fonte.empty:
             continue
         id_dig = df_fonte[info["id_col"]].apply(_so_digitos_id)
-        mascara = id_dig.isin(ids_nao_loc_dig) & (num(df_fonte[info["valor_col"]]) > 0)
+        # Universo completo (com e sem execucao), so em fase ativa: sai quem esta
+        # anulado, cancelado, rescindido, impedido, rejeitado ou em elaboracao.
+        sit = df_fonte["Situação"].fillna("").astype(str).str.upper()
+        ativa = ~sit.str.contains("ANULAD|CANCELAD|RESCINDID|IMPEDID|REJEITAD|ELABORA", regex=True)
+        ativa = ativa & ((sit != "") | (num(df_fonte[info["valor_col"]]) > 0))
+        mascara = id_dig.isin(ids_nao_loc_dig) & ativa
         sub = df_fonte.loc[mascara].copy()
         if sub.empty:
             continue
+        executado = num(sub[info["valor_col"]])
         linhas_pendentes.append(pd.DataFrame({
             "Fonte": fonte,
             "Identificador": sub[info["id_col"]],
             "Beneficiário": sub.get("Beneficiário", ""),
             "Data de celebração": sub.get("Data de celebração", ""),
-            "Valor (R$)": num(sub[info["valor_col"]]),
+            "Situação": sub["Situação"],
+            "Execução": executado.map(lambda v: "Com" if v > 0 else "Sem"),
+            "Valor (R$)": executado,
         }))
     df_pendentes = (
         pd.concat(linhas_pendentes, ignore_index=True).sort_values("Valor (R$)", ascending=False)
         if linhas_pendentes else
-        pd.DataFrame(columns=["Fonte", "Identificador", "Beneficiário", "Data de celebração", "Valor (R$)"])
+        pd.DataFrame(columns=["Fonte", "Identificador", "Beneficiário", "Data de celebração", "Situação", "Execução", "Valor (R$)"])
     )
     params_pendentes = {
-        "Valor (R$)": "valor pago/repassado já executado (> 0) na fonte - exclui o que ainda não foi celebrado ou está zerado",
+        "Valor (R$)": "valor pago/repassado/desembolsado na origem (0 = ainda sem execução financeira)",
     }
 
-    # --- Tabela 5: por UG beneficiaria - quais UGs do GDF mais precisam de
-    # regularizacao no SIGGO (mais registros sem correspondencia/maior valor
-    # sem correspondencia) ---
+    # --- Tabela 5: ranking por UG beneficiaria (ótica do SIGGo) - quais UGs mais
+    # precisam cadastrar o identificador no NUTRANSFSIAFI: registros SEM
+    # identificador (so candidato ou sem correspondencia) e o valor envolvido ---
     cz = cruzamento.copy()
-    cz["_sem_match"] = cz["Encontrado em"] == "-"
+    cz["_camada"] = cz["Confiança"].astype(str).str.extract(r"^(\d+)")[0]
+    cz["_sem_ident"] = cz["_camada"] != "1"
+    cz["_so_cand"] = cz["_camada"].notna() & cz["_sem_ident"]
     grp_ug = cz.groupby("Beneficiário").agg(
         Registros=("Nº Transf.", "count"),
-        **{"Sem correspondência": ("_sem_match", "sum")},
-        **{"Valor total (R$)": ("Valor (R$)", "sum")},
+        **{"Sem identificador": ("_sem_ident", "sum")},
+        **{"Só candidato": ("_so_cand", "sum")},
     )
-    valor_sem_match = cz.loc[cz["_sem_match"]].groupby("Beneficiário")["Valor (R$)"].sum()
-    grp_ug["Valor s/ corresp. (R$)"] = grp_ug.index.map(valor_sem_match).fillna(0)
+    valor_sem_id = cz.loc[cz["_sem_ident"]].groupby("Beneficiário")["Valor (R$)"].sum()
+    grp_ug["Valor s/ ident. (R$)"] = grp_ug.index.map(valor_sem_id).fillna(0)
     grp_ug = grp_ug.reset_index().rename(columns={"Beneficiário": "UG"})
-    grp_ug["% s/ corresp."] = (
-        (grp_ug["Sem correspondência"] / grp_ug["Registros"] * 100).round(1).astype(str).str.replace(".", ",", regex=False) + "%"
+    grp_ug["% s/ ident."] = (
+        (grp_ug["Sem identificador"] / grp_ug["Registros"] * 100).round(1).astype(str).str.replace(".", ",", regex=False) + "%"
     )
-    grp_ug = grp_ug.sort_values("Valor s/ corresp. (R$)", ascending=False)
-    grp_ug = grp_ug[grp_ug["Sem correspondência"] > 0]
+    grp_ug = grp_ug.sort_values("Valor s/ ident. (R$)", ascending=False)
+    grp_ug = grp_ug[grp_ug["Sem identificador"] > 0]
     params_ug = {
-        "Sem correspondência": "registros dessa UG na aba Cruzamento sem nenhuma correspondência localizada",
+        "Sem identificador": "registros dessa UG no SIGGO cujo NUTRANSFSIAFI não traz o identificador do instrumento",
+        "Só candidato": "dos sem identificador, quantos têm pista (Nº Original, conta, objeto, beneficiário/valor): basta cadastrar o identificador",
+    }
+
+    # --- Tabela 6: ranking por beneficiario (otica das APIs) - instrumentos
+    # pendentes (em fase ativa, identificador ausente do NUTRANSFSIAFI) ---
+    if len(df_pendentes):
+        dp = df_pendentes.copy()
+        dp["_com"] = dp["Execução"] == "Com"
+        dp["_vcom"] = dp["Valor (R$)"].where(dp["_com"], 0)
+        grp_api = dp.groupby("Beneficiário").agg(
+            Pendências=("Identificador", "count"),
+            **{"Com execução": ("_com", "sum")},
+            **{"Valor repassado (R$)": ("_vcom", "sum")},
+        ).reset_index().sort_values(["Valor repassado (R$)", "Pendências"], ascending=False)
+    else:
+        grp_api = pd.DataFrame(columns=["Beneficiário", "Pendências", "Com execução", "Valor repassado (R$)"])
+    params_api = {
+        "Pendências": "instrumentos das APIs/CSV em fase ativa cujo identificador não consta no NUTRANSFSIAFI de nenhum registro do SIGGO",
     }
 
     html = f"""
-    <p class="fonte-info">Visão consolidada dos achados da aba Cruzamento - quantos registros do SIGGO foram
-    localizados em cada fonte do TransfereGov, por qual camada de confiança, quanto de cada fonte (SICONV,
-    Gestão de Parcerias, Fundo a Fundo, Transferências Especiais) já foi localizado no SIGGO, o que consta na
-    fonte mas ainda não foi localizado, e quais UGs do GDF mais precisam de regularização.</p>
+    <p class="fonte-info">Visão consolidada da aba Cruzamento. Um registro do SIGGO só é <strong>identificado</strong> quando o
+    <code>NUTRANSFSIAFI</code> traz o identificador do instrumento no TransfereGov; as demais camadas são apenas pistas
+    ("candidato"). Abaixo: quanto já foi cadastrado, quais UGs e beneficiários mais precisam regularizar, e a lista de pendências.</p>
     {kpis_html}
     <div class="resumo-widgets">
       <div class="resumo-widget-card">
-        <h3 class="resumo-titulo">Por camada de confiança</h3>
+        <h3 class="resumo-titulo">Por camada de confiança (só a camada 1 identifica)</h3>
         <div class="resumo-bars">{barras_camada}</div>
       </div>
       <div class="resumo-widget-card">
@@ -1354,18 +1468,20 @@ def montar_resumo(cruzamento: pd.DataFrame, cobertura_fontes: dict, dados_fontes
         <div class="resumo-bars">{barras_fonte}</div>
       </div>
     </div>
-    <h3 class="resumo-titulo">Cobertura por fonte — o que já foi localizado no SIGGO</h3>
+    <h3 class="resumo-titulo">Cobertura por fonte — instrumentos com o identificador cadastrado no NUTRANSFSIAFI do SIGGO</h3>
     <div class="resumo-cov-grid">{cards_cobertura}</div>
     <div class="resumo-grid">
       <div>
-        <h3 class="resumo-titulo">Por UG beneficiária — quem mais precisa de regularização no SIGGO</h3>
+        <h3 class="resumo-titulo">Ótica do SIGGO — UGs com mais registros sem identificador</h3>
         {montar_tabela_html(grp_ug, "resumo_ug", params_ug)}
       </div>
       <div>
-        <h3 class="resumo-titulo">Pendentes no TransfereGov — consta na API, valor já executado, mas não foi localizado no SIGGO</h3>
-        {montar_tabela_html(df_pendentes, "resumo_pendentes", params_pendentes)}
+        <h3 class="resumo-titulo">Ótica das APIs — beneficiários com mais instrumentos pendentes</h3>
+        {montar_tabela_html(grp_api, "resumo_api", params_api)}
       </div>
     </div>
+    <h3 class="resumo-titulo">Pendentes no TransfereGov — consta na API (em fase ativa, com ou sem execução) e o identificador não está no NUTRANSFSIAFI do SIGGO</h3>
+    {montar_tabela_html(df_pendentes, "resumo_pendentes", params_pendentes)}
     """
     return html
 
@@ -1821,7 +1937,11 @@ window.LINHAS_ATUAIS = {{}};
   foi cruzada com as demais (TransfereGov); serve para validação e exploração antes do cruzamento.<br><br>
   <strong>Aba Cruzamento:</strong> para cada um dos registros do SIGGO, tenta achar o instrumento
   correspondente no TransfereGov, sempre pela chave <strong>mais robusta disponível primeiro</strong>, em camadas de confiança
-  decrescente: <strong>1 — Nº SICONV/SIAFI:</strong> <code>NUTRANSFSIAFI</code> = <code>NR_CONVENIO</code> no SICONV.
+  decrescente: <strong>1 — Nº SICONV/SIAFI:</strong> <code>NUTRANSFSIAFI</code> (agora CHAR(21)) igual ao identificador de <strong>qualquer</strong> origem —
+  <code>NR_CONVENIO</code>, <code>cd_parceria</code> ou <code>codigo_plano_acao</code> (Fundo a Fundo e Especiais) — comparados sem hífen, sem pontos
+  e sem zeros à esquerda; valores só com zeros ou com outros símbolos (ex.: "05/2026") não contam. Na aba Resumo, um instrumento só é
+  "localizado" por evidência de identificador, conta, objeto ou soma (camadas 1 a 5); as camadas 7 a 9 (semelhança de beneficiário, valor,
+  ano ou objeto) apenas indicam candidato, e o instrumento segue pendente até ser conferido.
   <strong>2 — Substring (Nº Original):</strong> os dígitos de <code>NUORIGINAL</code> contêm (ou estão contidos em) o
   identificador de qualquer fonte (<code>NR_CONVENIO</code>/<code>cd_parceria</code>/<code>codigo_plano_acao</code>/
   <code>numero_emenda_parlamentar_plano_acao</code> de Transferências Especiais ou SICONV — incluído em 2026-09-17 a partir de um
@@ -1862,10 +1982,14 @@ window.LINHAS_ATUAIS = {{}};
   <strong>Aba Resumo:</strong> consolida a aba Cruzamento sob duas óticas. <strong>Do SIGGO para o TransfereGov</strong> —
   quantos registros do SIGGO foram localizados, por camada e por fonte, e quais UGs beneficiárias têm mais registros sem
   correspondência (candidatas a regularização). <strong>Do TransfereGov para o SIGGO</strong> — tabela "Cobertura por fonte"
-  (quantos convênios/parcerias/planos de ação de cada fonte já foram localizados no SIGGO) e tabela "Pendentes no
-  TransfereGov", que lista os identificadores de cada fonte com valor pago/repassado já executado (> 0) mas que nenhum
-  registro do SIGGO cita — instrumentos ainda não celebrados ou com valor zerado são propositalmente excluídos dessa
-  lista, por estarem em fase inicial e não representarem pendência real.
+  (quantos convênios/parcerias/planos de ação de cada fonte têm o identificador cadastrado no <code>NUTRANSFSIAFI</code> do SIGGO) e
+  tabela "Pendentes no TransfereGov", com todos os instrumentos de cada fonte em fase ativa (com ou sem execução financeira) cujo
+  identificador não consta no <code>NUTRANSFSIAFI</code> de nenhum registro do SIGGO; ficam de fora os anulados, cancelados,
+  rescindidos, impedidos, rejeitados e em elaboração. <strong>Regra de "localizado" (2026-10-08):</strong> só a camada 1 identifica o
+  instrumento, pois o campo foi ampliado para as UGs cadastrarem o identificador; as camadas 2 a 9 são apenas pistas, e a falta de
+  cadastro no <code>NUTRANSFSIAFI</code> é justamente o que se quer evidenciar. <strong>Valor pago do Fundo a Fundo:</strong> contas
+  bancárias compartilhadas por mais de um plano (7 contas, 15 planos) têm o pago rateado pelo valor do repasse; antes cada plano
+  recebia a conta inteira e a soma (R$ 851,9 mi) superava em R$ 326,9 mi o pago real (R$ 525,0 mi).
 </div>
 
 <script>
@@ -1875,7 +1999,7 @@ const COLUNAS_NUM = window.COLUNAS_NUM;
 const ORDEM = window.ORDEM;
 const LINHAS_ATUAIS = window.LINHAS_ATUAIS;
 
-const SUBTABELAS_RESUMO = ['resumo_ug', 'resumo_pendentes'];
+const SUBTABELAS_RESUMO = ['resumo_ug', 'resumo_api', 'resumo_pendentes'];
 
 function mostrarAba(id) {{
   document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.remove('ativo'));
