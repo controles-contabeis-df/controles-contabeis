@@ -224,7 +224,7 @@ tfoot tr td:first-child{text-align:left}
 
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">💵</div>
+    <div class="hlogo">🔄</div>
     <h1>REPASSES E SUBREPASSES
       <span>SIGGO · Ano Exercício 2026</span>
     </h1>
