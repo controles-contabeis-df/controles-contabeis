@@ -270,6 +270,28 @@ header {
 }
 .card:hover .card-link .arrow { transform: translateX(4px); }
 
+/* ── Cards do Encerramento do Exercício (destaque azul) ── */
+.card.encerramento {
+  background: var(--navy-light);
+  border-color: var(--navy-light);
+}
+.card.encerramento:hover { border-color: var(--teal-light); }
+.card.encerramento .card-icon { background: rgba(255,255,255,.14); }
+.card.encerramento:hover .card-icon { background: rgba(255,255,255,.24); }
+.card.encerramento .card-info h3 { color: #ffffff; }
+.card.encerramento .card-info p { color: #c8d8ec; }
+.card.encerramento .tag {
+  background: rgba(255,255,255,.10);
+  border-color: rgba(255,255,255,.22);
+  color: #dbe7f7;
+}
+.card.encerramento .card-link {
+  background: var(--navy-mid);
+  border-top-color: rgba(255,255,255,.12);
+  color: var(--teal-light);
+}
+.card.encerramento:hover .card-link { background: var(--navy); }
+
 /* ── Card "em breve" ── */
 .card.em-breve {
   opacity: .65;
@@ -357,29 +379,10 @@ footer a:hover { text-decoration: underline; }
 
   <div class="cards-grid">
 
-    <!-- 1. Saldos Invertidos -->
-    <a class="card" href="saldo_invertido.html">
-      <div class="card-inner">
-        <div class="card-icon">🔄</div>
-        <div class="card-info">
-          <h3>Saldos Invertidos</h3>
-          <p>Identifica contas de classes 1 a 8 cujo saldo acumulado está no sentido contrário ao esperado, agrupado por Gestão, UG e Conta Contábil.</p>
-        </div>
-      </div>
-      <div class="card-tags">
-        <span class="tag">Classes 1 a 8</span>
-        <span class="tag">Por Gestão · UG · Conta</span>
-      </div>
-      <div class="card-link">
-        Abrir painel
-        <span class="arrow">→</span>
-      </div>
-    </a>
-
     <!-- 2. Contas Transitórias -->
-    <a class="card" href="contas_transitorias.html">
+    <a class="card encerramento" href="contas_transitorias.html">
       <div class="card-inner">
-        <div class="card-icon">⚖️</div>
+        <div class="card-icon">0️⃣</div>
         <div class="card-info">
           <h3>Contas Transitórias</h3>
           <p>Monitora os saldos das contas que não podem encerrar o exercício com valor diferente de zero.</p>
@@ -397,9 +400,9 @@ footer a:hover { text-decoration: underline; }
     </a>
 
     <!-- 3. Repasse a Receber -->
-    <a class="card" href="empenhos_liquidar.html">
+    <a class="card encerramento" href="empenhos_liquidar.html">
       <div class="card-inner">
-        <div class="card-icon">📋</div>
+        <div class="card-icon">⏩</div>
         <div class="card-info">
           <h3>Repasse a Receber — Despesas Empenhadas e não Liquidadas</h3>
           <p>Consulta de despesas empenhadas e não liquidadas por Fonte e Categoria, para controle de repasses e registro de RPNP.</p>
@@ -409,6 +412,26 @@ footer a:hover { text-decoration: underline; }
         <span class="tag">Conta 622920701</span>
         <span class="tag">Fonte · Categoria</span>
         <span class="tag">Por empenho e UG</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- Superávit a Devolver -->
+    <a class="card encerramento" href="superavit_a_devolver.html">
+      <div class="card-inner">
+        <div class="card-icon">↩️</div>
+        <div class="card-info">
+          <h3>Superávit a Devolver</h3>
+          <p>Consulta a Disponibilidade Real (conta 721190200) por Gestão, UG e Fonte, para subsidiar a inscrição de Superávit a Devolver, com as exceções legais aplicadas.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Conta 721190200</span>
+        <span class="tag">Fontes 2 e 4</span>
+        <span class="tag">Por UG e Fonte</span>
       </div>
       <div class="card-link">
         Abrir painel
@@ -428,26 +451,6 @@ footer a:hover { text-decoration: underline; }
       <div class="card-tags">
         <span class="tag">AF · PF · RPNP</span>
         <span class="tag">Conta 721190300</span>
-        <span class="tag">Por UG e Fonte</span>
-      </div>
-      <div class="card-link">
-        Abrir painel
-        <span class="arrow">→</span>
-      </div>
-    </a>
-
-    <!-- Superávit a Devolver -->
-    <a class="card" href="superavit_a_devolver.html">
-      <div class="card-inner">
-        <div class="card-icon">↩️</div>
-        <div class="card-info">
-          <h3>Superávit a Devolver</h3>
-          <p>Consulta a Disponibilidade Real (conta 721190200) por Gestão, UG e Fonte, para subsidiar a inscrição de Superávit a Devolver, com as exceções legais aplicadas.</p>
-        </div>
-      </div>
-      <div class="card-tags">
-        <span class="tag">Conta 721190200</span>
-        <span class="tag">Fontes 2 e 4</span>
         <span class="tag">Por UG e Fonte</span>
       </div>
       <div class="card-link">
@@ -667,6 +670,25 @@ footer a:hover { text-decoration: underline; }
         <span class="tag">Equação A · Equação B</span>
         <span class="tag">Subtítulo 2</span>
         <span class="tag">Por documento</span>
+      </div>
+      <div class="card-link">
+        Abrir painel
+        <span class="arrow">→</span>
+      </div>
+    </a>
+
+    <!-- 1. Saldos Invertidos -->
+    <a class="card" href="saldo_invertido.html">
+      <div class="card-inner">
+        <div class="card-icon">🔄</div>
+        <div class="card-info">
+          <h3>Saldos Invertidos</h3>
+          <p>Identifica contas de classes 1 a 8 cujo saldo acumulado está no sentido contrário ao esperado, agrupado por Gestão, UG e Conta Contábil.</p>
+        </div>
+      </div>
+      <div class="card-tags">
+        <span class="tag">Classes 1 a 8</span>
+        <span class="tag">Por Gestão · UG · Conta</span>
       </div>
       <div class="card-link">
         Abrir painel
