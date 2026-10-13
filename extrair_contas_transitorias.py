@@ -99,7 +99,7 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
   --surface:#fff;--bg:#f2f5f9;--border:#dce3ed;
   --row-alt:#f7f9fc;--hover:#eaf4f7;
   --text:#1a2033;--muted:#6b7a99;
-  --red:#c0392b;--green:#1a7a44;--orange:#e67e22;--radius:10px;
+  --red:#c0392b;--green:#1a7a44;--radius:10px;
   --shadow:0 2px 12px rgba(13,27,62,.10);
 }}
 body{{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}}
@@ -160,12 +160,11 @@ thead th.sorted .si{{opacity:1}}
 tbody tr{{transition:background .1s}}
 tbody tr:nth-child(even){{background:var(--row-alt)}}
 tbody tr:hover{{background:var(--hover)}}
-tbody tr.pendente{{background:#fff5f4!important}}
-tbody tr.pendente:hover{{background:#ffe8e6!important}}
 td{{padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}}
 td.right{{text-align:right}}
 td.mono{{font-family:'Consolas','Courier New',monospace;font-size:12px;color:var(--muted)}}
-.vnz{{color:var(--orange);font-weight:700}}
+.vp{{color:var(--green);font-weight:700}}
+.vn{{color:var(--red);font-weight:700}}
 .vz{{color:var(--muted)}}
 tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px}}
 .empty{{text-align:center;padding:56px;color:var(--muted)}}
@@ -184,7 +183,7 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
 <body>
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">⚖️</div>
+    <div class="hlogo">0️⃣</div>
     <h1>Contas Transitórias
       <span>SIGGO · Saldos de contas contábeis que devem zerar ao fim do exercício</span>
     </h1>
@@ -254,7 +253,7 @@ const ALL={dados};
 let fil=[],sCol='',sAsc=true,pg=1,filtrarNZ=false;
 const PS=50;
 const brl=v=>isNaN(v)?'—':Number(v).toLocaleString('pt-BR',{{style:'currency',currency:'BRL'}});
-const vnz=v=>Math.abs(v)<0.005?'vz':'vnz';
+const vc=v=>Math.abs(v)<0.005?'vz':v>0?'vp':'vn';
 
 // Campos derivados
 ALL.forEach(r=>{{
@@ -351,18 +350,17 @@ function render(){{
   if(!fil.length){{tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro com os filtros selecionados.</td></tr>';tf.innerHTML='';document.getElementById('pag').innerHTML='';return;}}
   const rows=fil.slice((pg-1)*PS,pg*PS);
   tb.innerHTML=rows.map(r=>{{
-    const p=Math.abs(r.SALDO)>=0.005;
     const sep=r.CONTA_LABEL.indexOf(' - ');
     const contaHtml=sep>=0?`<strong>${{r.CONTA_LABEL.slice(0,sep)}}</strong> — ${{r.CONTA_LABEL.slice(sep+2)}}`:r.CONTA_LABEL;
-    return`<tr class="${{p?'pendente':''}}">
+    return`<tr>
       <td>${{r.GESTAO_LABEL}}</td>
       <td>${{r.UNIDADE_GESTORA}}</td>
       <td>${{contaHtml}}</td>
-      <td class="right ${{vnz(r.SALDO)}}">${{brl(r.SALDO)}}</td>
+      <td class="right ${{vc(r.SALDO)}}">${{brl(r.SALDO)}}</td>
     </tr>`;
   }}).join('');
   const st=fil.reduce((a,r)=>a+r.SALDO,0);
-  tf.innerHTML=`<tr><td colspan="3">Totais (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vnz(st)}}">${{brl(st)}}</td></tr>`;
+  tf.innerHTML=`<tr><td colspan="3">Totais (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vc(st)}}">${{brl(st)}}</td></tr>`;
   paginar();
 }}
 function kpis(){{
@@ -378,7 +376,7 @@ function kpis(){{
     <div class="kpi"><div class="kl">Total de Registros</div><div class="kv">${{fil.length.toLocaleString('pt-BR')}}</div><div class="ks">${{ugs}} UG${{ugs!==1?'s':''}} · ${{contas}} conta${{contas!==1?'s':''}}</div></div>
     <div class="kpi ${{kc}}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${{nz>0?'var(--red)':'var(--green)'}}">${{nz.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge ${{nz>0?'br':'bg'}}">${{pct}}% dos registros</span></div></div>
     <div class="kpi ko"><div class="kl">Zerados (OK)</div><div class="kv" style="color:var(--green)">${{ok.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge bg">${{(100-parseFloat(pct)).toFixed(1)}}% dos registros</span></div></div>
-    <div class="kpi ${{Math.abs(st)<0.01?'ko':'ka'}}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${{vnz(st)}}">${{brl(st)}}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
+    <div class="kpi ${{Math.abs(st)<0.01?'ko':'ka'}}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${{vc(st)}}">${{brl(st)}}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
 }}
 function paginar(){{
   const pag=document.getElementById('pag'),pages=Math.ceil(fil.length/PS);
