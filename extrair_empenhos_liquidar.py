@@ -85,11 +85,11 @@ HTML_TEMPLATE = r"""<!DOCTYPE html>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
   --navy:#0d1b3e;--navy-mid:#162550;--navy-light:#1e3267;
-  --teal:#2d9048;--teal-light:#3aaf5c;
-  --surface:#ffffff;--bg:#f6fbf6;--border:#c8deca;
-  --row-alt:#edf7ed;--hover:#e4f2e3;
+  --teal:#0090a8;--teal-light:#00b8d4;
+  --surface:#fff;--bg:#f2f5f9;--border:#dce3ed;
+  --row-alt:#f7f9fc;--hover:#eaf4f7;
   --text:#1a2033;--muted:#6b7a99;
-  --red:#c0392b;--green:#1a7a44;--blue-val:#1a4d2e;--radius:10px;
+  --red:#c0392b;--green:#1a7a44;--radius:10px;
   --shadow:0 2px 12px rgba(13,27,62,.10);
 }
 body{font-family:'Segoe UI',system-ui,Arial,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh}
@@ -100,7 +100,8 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 #ts{font-size:11px;color:#7a99bb;white-space:nowrap}
 .voltar{font-size:11px;color:#7a99bb;text-decoration:none;display:flex;align-items:center;gap:4px;margin-left:20px;opacity:.8}
 .voltar:hover{opacity:1}
-.aviso{background:#fff8e6;border-bottom:2px solid #f0a500;padding:10px 28px;font-size:12px;color:#7a4a00}
+.aviso{background:#fff8e6;border-bottom:1px solid #f0c060;padding:8px 28px;font-size:11.5px;color:#7a5c00;display:flex;align-items:center;gap:8px}
+.aviso strong{color:#5a3e00}
 .fbar{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 28px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
 .fg{display:flex;flex-direction:column;gap:4px}
 .fg label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
@@ -138,36 +139,35 @@ header h1 span{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-t
 .sw::before{content:'🔍';position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none}
 .tw{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto}
 table{width:100%;border-collapse:collapse;min-width:480px}
-thead th{background:#495249;color:#e8f0e8;padding:11px 14px;font-size:11px;font-weight:600;white-space:nowrap;letter-spacing:.3px;position:sticky;top:0}
+thead th{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;letter-spacing:.3px;position:sticky;top:0}
 thead th.right{text-align:right}
 /* ── Linhas hierárquicas ── */
-tr.row-ug{background:#bfd1be;cursor:pointer}
-tr.row-ug:hover{background:#b0c5af}
-tr.row-ug td{color:#1a4d2e;font-weight:700;font-size:12.5px;padding:10px 14px;border-bottom:2px solid #b0d4bc}
-tr.row-ug td.right{color:#1a4d2e;font-size:13px}
-tr.row-fonte{background:#e4f2e3;cursor:pointer}
-tr.row-fonte:hover{background:#dbeeda}
-tr.row-fonte td{color:#1a4d2e;font-weight:600;font-size:12px;padding:8px 14px;border-bottom:1px solid #c8deca}
-tr.row-fonte td.right{color:#1a4d2e;font-weight:700}
-tr.row-cat{background:#ffffff}
-tr.row-cat:nth-child(even){background:#f6fbf6}
+tr.row-ug{background:#1e3267;cursor:pointer}
+tr.row-ug:hover{background:#162550}
+tr.row-ug td{color:#e8f0fc;font-weight:700;font-size:12px;padding:10px 14px;border-bottom:2px solid #0d1b3e}
+tr.row-ug td.right{color:#e8f0fc}
+tr.row-fonte{background:#2a4a7f;cursor:pointer}
+tr.row-fonte:hover{background:#243f6e}
+tr.row-fonte td{color:#dce8f8;font-weight:700;font-size:12px;padding:8px 14px;border-bottom:1.5px solid #1e3267}
+tr.row-fonte td.right{color:#dce8f8}
+tr.row-cat{background:var(--surface)}
+tr.row-cat:nth-child(even){background:var(--row-alt)}
 tr.row-cat:hover{background:var(--hover)}
-tr.row-cat td{font-size:12px;padding:7px 14px;border-bottom:1px solid var(--border)}
-tr.row-cat td.right{color:var(--blue-val);font-weight:600}
+tr.row-cat td{font-size:12.5px;padding:8px 14px;border-bottom:1px solid var(--border);color:var(--text)}
+tr.row-cat td.right{color:var(--green);font-weight:600}
 td.right{text-align:right;font-variant-numeric:tabular-nums}
 .ico{display:inline-block;width:16px;font-size:11px;color:var(--teal-light);flex-shrink:0;user-select:none}
 .ind1{display:inline-block;width:20px}
 .ind2{display:inline-block;width:40px}
-tfoot td{background:#dbeeda;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px;color:#1a4d2e}
-tfoot td.right{color:var(--blue-val);font-weight:700}
+tfoot td{background:#f0f4fb;font-weight:700;border-top:2px solid var(--teal);padding:10px 14px;font-size:12.5px}
 .empty{text-align:center;padding:56px;color:var(--muted)}
-.vp{color:var(--blue-val);font-weight:700}
+.vp{color:var(--green);font-weight:700}
 </style>
 </head>
 <body>
 <header>
   <div style="display:flex;align-items:center">
-    <div class="hlogo">📋</div>
+    <div class="hlogo">⏩</div>
     <h1>Repasse a Receber — Despesas Empenhadas e não Liquidadas
       <span>SIGGO · Ano Exercício 2026 · Conta 622920701</span>
     </h1>
