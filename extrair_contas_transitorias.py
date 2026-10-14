@@ -150,16 +150,21 @@ header h1 span{{font-weight:400;color:#9ab0cc;font-size:12px;display:block;text-
 .sw input::placeholder{{color:var(--teal);font-weight:500}}
 .sw::before{{content:'🔍';position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none}}
 .tw{{border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow);overflow-x:auto}}
-table{{width:100%;border-collapse:collapse;min-width:900px}}
-thead th{{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;cursor:pointer;user-select:none;letter-spacing:.3px;transition:background .12s}}
+table{{width:100%;border-collapse:collapse;min-width:700px}}
+thead th{{background:var(--navy);color:#c8d8ec;padding:11px 14px;font-size:11px;font-weight:600;text-align:left;white-space:nowrap;user-select:none;letter-spacing:.3px}}
 thead th.right{{text-align:right}}
-thead th:hover{{background:var(--navy-light)}}
-thead th.sorted{{color:var(--teal-light)}}
-.si{{margin-left:4px;opacity:.45;font-size:9px}}
-thead th.sorted .si{{opacity:1}}
 tbody tr{{transition:background .1s}}
-tbody tr:nth-child(even){{background:var(--row-alt)}}
-tbody tr:hover{{background:var(--hover)}}
+tr.grp-l1{{background:var(--navy);cursor:pointer}}
+tr.grp-l1 td{{color:#e8f0fc;font-weight:700;padding:10px 14px}}
+tr.grp-l1:hover td{{background:var(--navy-mid)}}
+tr.grp-l2{{background:#1e3267;cursor:pointer}}
+tr.grp-l2 td{{color:#c8d8ec;font-weight:700;padding:9px 14px 9px 28px}}
+tr.grp-l2:hover td{{background:#162550}}
+tr.grp-l3{{background:var(--surface)}}
+tr.grp-l3:nth-child(even){{background:var(--row-alt)}}
+tr.grp-l3:hover{{background:var(--hover)}}
+tr.grp-l3 td{{padding:8px 14px 8px 46px}}
+.tog{{margin-right:6px;font-style:normal;display:inline-block;width:12px}}
 td{{padding:9px 14px;border-bottom:1px solid var(--border);white-space:nowrap;font-variant-numeric:tabular-nums}}
 td.right{{text-align:right}}
 td.mono{{font-family:'Consolas','Courier New',monospace;font-size:12px;color:var(--muted)}}
@@ -222,6 +227,8 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
   </div>
   <div class="bgrp">
     <button class="btn btn-nz" id="btn-nz" onclick="toggleNZ()">⚠ Saldo ≠ 0</button>
+    <button class="btn btn-g" onclick="expandirTudo()">▼ Expandir tudo</button>
+    <button class="btn btn-g" onclick="recolherTudo()">▲ Recolher tudo</button>
     <button class="btn btn-g" onclick="limpar()">↺ Limpar filtros</button>
     <button class="btn btn-p" onclick="exportar()">⬇ Exportar CSV</button>
   </div>
@@ -236,22 +243,18 @@ tfoot td{{background:#e8f0f8;font-weight:700;border-top:2px solid var(--teal);pa
     <table>
       <thead>
         <tr>
-          <th onclick="sort('GESTAO_LABEL',this)">Gestão<span class="si">↕</span></th>
-          <th onclick="sort('UNIDADE_GESTORA',this)">Unidade Gestora<span class="si">↕</span></th>
-          <th onclick="sort('CONTA_LABEL',this)">Conta Contábil<span class="si">↕</span></th>
-          <th onclick="sort('SALDO',this)" class="right">Saldo<span class="si">↕</span></th>
+          <th>Gestão / Unidade Gestora / Conta Contábil</th>
+          <th class="right">Saldo</th>
         </tr>
       </thead>
       <tbody id="tbody"></tbody>
       <tfoot id="tfoot"></tfoot>
     </table>
   </div>
-  <div class="pag" id="pag"></div>
 </div>
 <script>
 const ALL={dados};
-let fil=[],sCol='',sAsc=true,pg=1,filtrarNZ=false;
-const PS=50;
+let fil=[],filtrarNZ=false;
 const brl=v=>isNaN(v)?'—':Number(v).toLocaleString('pt-BR',{{style:'currency',currency:'BRL'}});
 const vc=v=>Math.abs(v)<0.005?'vz':v>0?'vp':'vn';
 
@@ -328,40 +331,70 @@ function aplicar(){{
     if(b&&!r.GESTAO_LABEL.toLowerCase().includes(b)&&!r.UNIDADE_GESTORA.toLowerCase().includes(b)&&!r.CONTA_LABEL.toLowerCase().includes(b))return false;
     return true;
   }});
-  if(sCol)doSort();pg=1;render();kpis();
+  render();kpis();
 }}
 function limpar(){{
   document.getElementById('busca').value='';
   ['g','u','c'].forEach(k=>limparAC(k));
   if(filtrarNZ)toggleNZ();
 }}
-function sort(col,th){{
-  sAsc=sCol===col?!sAsc:true;sCol=col;
-  document.querySelectorAll('thead th').forEach(t=>{{t.classList.remove('sorted');const si=t.querySelector('.si');if(si)si.textContent='↕'}});
-  th.classList.add('sorted');th.querySelector('.si').textContent=sAsc?'↑':'↓';doSort();pg=1;render();
-}}
-function doSort(){{
-  fil.sort((a,b)=>{{const va=a[sCol],vb=b[sCol];if(typeof va==='number')return sAsc?va-vb:vb-va;return sAsc?String(va).localeCompare(String(vb),'pt-BR'):String(vb).localeCompare(String(va),'pt-BR')}});
-}}
 function render(){{
   const tb=document.getElementById('tbody'),tf=document.getElementById('tfoot');
   const nz=fil.filter(r=>Math.abs(r.SALDO)>=0.005).length;
   document.getElementById('cnt').textContent=fil.length.toLocaleString('pt-BR')+' registro'+(fil.length!==1?'s':'')+(nz>0?' · '+nz.toLocaleString('pt-BR')+' com saldo ≠ 0':'');
-  if(!fil.length){{tb.innerHTML='<tr><td colspan="4" class="empty">Nenhum registro com os filtros selecionados.</td></tr>';tf.innerHTML='';document.getElementById('pag').innerHTML='';return;}}
-  const rows=fil.slice((pg-1)*PS,pg*PS);
-  tb.innerHTML=rows.map(r=>{{
-    const sep=r.CONTA_LABEL.indexOf(' - ');
-    const contaHtml=sep>=0?`<strong>${{r.CONTA_LABEL.slice(0,sep)}}</strong> — ${{r.CONTA_LABEL.slice(sep+2)}}`:r.CONTA_LABEL;
-    return`<tr>
-      <td>${{r.GESTAO_LABEL}}</td>
-      <td>${{r.UNIDADE_GESTORA}}</td>
-      <td>${{contaHtml}}</td>
-      <td class="right ${{vc(r.SALDO)}}">${{brl(r.SALDO)}}</td>
-    </tr>`;
-  }}).join('');
+  if(!fil.length){{tb.innerHTML='<tr><td colspan="2" class="empty">Nenhum registro com os filtros selecionados.</td></tr>';tf.innerHTML='';return;}}
+  // Árvore: Gestão → UG → Conta
+  const tree={{}};
+  fil.forEach(r=>{{
+    const g=r.GESTAO_LABEL,u=r.UNIDADE_GESTORA;
+    if(!tree[g])tree[g]={{s:0,ch:{{}}}};
+    if(!tree[g].ch[u])tree[g].ch[u]={{s:0,rows:[]}};
+    tree[g].ch[u].rows.push(r);
+    tree[g].ch[u].s+=r.SALDO;
+    tree[g].s+=r.SALDO;
+  }});
+  const srt=o=>Object.keys(o).sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  let html='',idx=0;
+  srt(tree).forEach(g=>{{
+    const gId='r'+(idx++),gN=tree[g];
+    html+=`<tr class="grp-l1" data-id="${{gId}}" onclick="tog('${{gId}}')"><td><span class="tog">▶</span>${{g}}</td><td class="right">${{brl(gN.s)}}</td></tr>`;
+    srt(gN.ch).forEach(u=>{{
+      const uId='r'+(idx++),uN=gN.ch[u];
+      html+=`<tr class="grp-l2" data-id="${{uId}}" data-p="${{gId}}" style="display:none" onclick="tog('${{uId}}')"><td><span class="tog">▶</span>${{u}}</td><td class="right">${{brl(uN.s)}}</td></tr>`;
+      uN.rows.sort((a,b)=>String(a.CONTA_CONTABIL).localeCompare(String(b.CONTA_CONTABIL),'pt-BR'));
+      uN.rows.forEach(r=>{{
+        const sep=r.CONTA_LABEL.indexOf(' - ');
+        const contaHtml=sep>=0?`<strong>${{r.CONTA_LABEL.slice(0,sep)}}</strong> — ${{r.CONTA_LABEL.slice(sep+3)}}`:r.CONTA_LABEL;
+        html+=`<tr class="grp-l3" data-p="${{uId}}" style="display:none"><td>${{contaHtml}}</td><td class="right ${{vc(r.SALDO)}}">${{brl(r.SALDO)}}</td></tr>`;
+      }});
+    }});
+  }});
+  tb.innerHTML=html;
   const st=fil.reduce((a,r)=>a+r.SALDO,0);
-  tf.innerHTML=`<tr><td colspan="3">Totais (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vc(st)}}">${{brl(st)}}</td></tr>`;
-  paginar();
+  tf.innerHTML=`<tr><td>Total geral (${{fil.length.toLocaleString('pt-BR')}} registros)</td><td class="right ${{vc(st)}}">${{brl(st)}}</td></tr>`;
+}}
+function tog(id){{
+  const row=document.querySelector(`tr[data-id="${{id}}"]`);
+  const t=row.querySelector('.tog');
+  if(t.textContent==='▼'){{collapseDesc(id);t.textContent='▶';}}
+  else{{
+    document.querySelectorAll(`tr[data-p="${{id}}"]`).forEach(r=>{{r.style.display='';const x=r.querySelector('.tog');if(x)x.textContent='▶';}});
+    t.textContent='▼';
+  }}
+}}
+function collapseDesc(id){{
+  document.querySelectorAll(`tr[data-p="${{id}}"]`).forEach(r=>{{
+    const cid=r.getAttribute('data-id');if(cid)collapseDesc(cid);
+    r.style.display='none';const x=r.querySelector('.tog');if(x)x.textContent='▶';
+  }});
+}}
+function expandirTudo(){{
+  document.querySelectorAll('tr[data-p]').forEach(r=>r.style.display='');
+  document.querySelectorAll('.tog').forEach(el=>el.textContent='▼');
+}}
+function recolherTudo(){{
+  document.querySelectorAll('tr[data-p]').forEach(r=>r.style.display='none');
+  document.querySelectorAll('.tog').forEach(el=>el.textContent='▶');
 }}
 function kpis(){{
   if(!fil.length){{document.getElementById('krow').innerHTML='';return;}}
@@ -376,21 +409,8 @@ function kpis(){{
     <div class="kpi"><div class="kl">Total de Registros</div><div class="kv">${{fil.length.toLocaleString('pt-BR')}}</div><div class="ks">${{ugs}} UG${{ugs!==1?'s':''}} · ${{contas}} conta${{contas!==1?'s':''}}</div></div>
     <div class="kpi ${{kc}}"><div class="kl">Com Saldo ≠ 0 (pendências)</div><div class="kv" style="color:${{nz>0?'var(--red)':'var(--green)'}}">${{nz.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge ${{nz>0?'br':'bg'}}">${{pct}}% dos registros</span></div></div>
     <div class="kpi ko"><div class="kl">Zerados (OK)</div><div class="kv" style="color:var(--green)">${{ok.toLocaleString('pt-BR')}}</div><div class="ks"><span class="badge bg">${{(100-parseFloat(pct)).toFixed(1)}}% dos registros</span></div></div>
-    <div class="kpi ${{Math.abs(st)<0.01?'ko':'ka'}}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${{vc(st)}}">${{brl(st)}}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
+    <div class="kpi ${{Math.abs(st)<0.01?'ko':'ka'}}"><div class="kl">Saldo Total (pendente)</div><div class="kv ${{Math.abs(st)>=0.005?'vn':'vz'}}">${{brl(st)}}</div><div class="ks">Soma dos saldos não zerados</div></div>`;
 }}
-function paginar(){{
-  const pag=document.getElementById('pag'),pages=Math.ceil(fil.length/PS);
-  if(pages<=1){{pag.innerHTML='';return;}}
-  const s=(pg-1)*PS+1,e=Math.min(pg*PS,fil.length);
-  let b=`<button onclick="ir(${{pg-1}})" ${{pg===1?'disabled':''}}>‹</button>`;
-  for(let i=1;i<=pages;i++){{
-    if(i===1||i===pages||Math.abs(i-pg)<=1)b+=`<button class="${{i===pg?'active':''}}" onclick="ir(${{i}})">${{i}}</button>`;
-    else if(Math.abs(i-pg)===2)b+=`<button disabled style="border:none;background:none">…</button>`;
-  }}
-  b+=`<button onclick="ir(${{pg+1}})" ${{pg===pages?'disabled':''}}>›</button>`;
-  pag.innerHTML=`<span>Mostrando ${{s.toLocaleString('pt-BR')}}–${{e.toLocaleString('pt-BR')}} de ${{fil.length.toLocaleString('pt-BR')}}</span><div class="pbtns">${{b}}</div>`;
-}}
-function ir(p){{const pages=Math.ceil(fil.length/PS);if(p<1||p>pages)return;pg=p;render();window.scrollTo({{top:0,behavior:'smooth'}})}}
 function exportar(){{
   if(!fil.length)return alert('Nenhum dado para exportar.');
   const cols=['COGESTAO','NOGESTAO','COUG','UNIDADE_GESTORA','CONTA_CONTABIL','NOCONTACONTABIL','SALDO'];
@@ -402,7 +422,8 @@ function exportar(){{
 }}
 window.onACInput=onACInput;window.onACFocus=onACFocus;window.onACBlur=onACBlur;
 window.selAC=selAC;window.limparAC=limparAC;
-window.toggleNZ=toggleNZ;window.aplicar=aplicar;window.limpar=limpar;window.sort=sort;window.ir=ir;window.exportar=exportar;
+window.toggleNZ=toggleNZ;window.aplicar=aplicar;window.limpar=limpar;window.exportar=exportar;
+window.tog=tog;window.expandirTudo=expandirTudo;window.recolherTudo=recolherTudo;
 aplicar();
 </script>
 </body>
