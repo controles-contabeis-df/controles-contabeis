@@ -229,7 +229,8 @@ def montar_parcerias():
     df["valor_repassado"] = df["id_parceria"].map(repasse_por_parceria).fillna(0)
 
     saida = pd.DataFrame({
-        "Nº Parceria": df["cd_parceria"].fillna(df["id_proposta"].astype("Int64").astype(str)),
+        # Int64 evita o sufixo ".0" quando o merge deixa propostas sem parceria (NaN)
+        "Nº Parceria": df["cd_parceria"].astype("Int64").astype("string").fillna(df["id_proposta"].astype("Int64").astype("string")),
         "Concedente": df["nm_ente_repassador"],
         "Beneficiário": df["nm_ente_recebedor"],
         "Objeto": df["ds_objeto"].astype(str).str.slice(0, 100),
