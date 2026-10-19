@@ -1,0 +1,11 @@
+﻿id_op_ob,data_emissao_op,numero_ordem_pagamento,vinculacao_op,situacao_op,descricao_situacao_op,data_situacao_op,data_emissao_ob,numero_ordem_bancaria,numero_ordem_lancamento,data_assinatura_ordenador_despesa_ob,data_assinatura_gestor_financeiro_ob,id_dh
+600003,,,,,PAGO,,,,,,,700003
+600004,,,,,PAGO,,,,,,,700004
+600006,,,,,PAGO,,,,,,,700006
+600007,,,,,PAGO,,,,,,,700007
+600009,,,,,PAGO,,,,,,,700009
+600011,,,,,PAGO,,,,,,,700011
+600012,,,,,PAGO,,,,,,,700012
+600013,,,,,PAGO,,,,,,,700013
+600014,,,,,PAGO,,,,,,,700014
+600015,,,,,PAGO,,,,,,,700015

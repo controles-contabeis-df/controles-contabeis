@@ -1,0 +1,11 @@
+﻿id_empenho,id_minuta_empenho,numero_empenho,situacao_empenho,descricao_situacao_empenho,tipo_documento_empenho,descricao_tipo_documento_empenho,status_processamento_empenho,ug_responsavel_empenho,ug_emitente_empenho,descricao_ug_emitente_empenho,fonte_recurso_empenho,plano_interno_empenho,ptres_empenho,grupo_natureza_despesa_empenho,natureza_despesa_empenho,subitem_empenho,categoria_despesa_empenho,modalidade_despesa_empenho,numero_ro_empenho,data_emissao_empenho,prioridade_desbloqueio_empenho,valor_empenho,id_plano_acao
+800003,,,,,,,,,,,,,,,,,,,,,,,900003
+800004,,,,,,,,,,,,,,,,,,,,,,,900004
+800006,,,,,,,,,,,,,,,,,,,,,,,900006
+800007,,,,,,,,,,,,,,,,,,,,,,,900007
+800009,,,,,,,,,,,,,,,,,,,,,,,900009
+800011,,,,,,,,,,,,,,,,,,,,,,,900011
+800012,,,,,,,,,,,,,,,,,,,,,,,900012
+800013,,,,,,,,,,,,,,,,,,,,,,,900013
+800014,,,,,,,,,,,,,,,,,,,,,,,900014
+800015,,,,,,,,,,,,,,,,,,,,,,,900015

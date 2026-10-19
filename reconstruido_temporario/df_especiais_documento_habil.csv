@@ -1,0 +1,11 @@
+﻿id_dh,id_minuta_documento_habil,numero_documento_habil,situacao_dh,descricao_situacao_dh,tipo_documento_dh,ug_emitente_dh,descricao_ug_emitente_dh,data_vencimento_dh,data_emissao_dh,ug_pagadora_dh,descricao_ug_pagadora_dh,variacao_patrimonial_diminuta_dh,passivo_transferencia_constitucional_legal_dh,descricao_centro_custo_dh,codigo_siorg_centro_custo_dh,mes_referencia_centro_custo_dh,ano_referencia_centro_custo_dh,mes_ano_referencia_centro_custo_dh,ug_beneficiada_centro_custo_dh,descricao_ug_beneficiada_centro_custo_dh,valor_dh,valor_rateio_dh,valor_custo_centro_custo_dh,id_empenho
+700003,,,,,,,,,,,,,,,,,,,,,1455790.0,,,800003
+700004,,,,,,,,,,,,,,,,,,,,,3285792.0,,,800004
+700006,,,,,,,,,,,,,,,,,,,,,5000000.0,,,800006
+700007,,,,,,,,,,,,,,,,,,,,,16051700.0,,,800007
+700009,,,,,,,,,,,,,,,,,,,,,8819682.0,,,800009
+700011,,,,,,,,,,,,,,,,,,,,,700000.0,,,800011
+700012,,,,,,,,,,,,,,,,,,,,,300000.0,,,800012
+700013,,,,,,,,,,,,,,,,,,,,,100000.0,,,800013
+700014,,,,,,,,,,,,,,,,,,,,,1100000.0,,,800014
+700015,,,,,,,,,,,,,,,,,,,,,500000.0,,,800015

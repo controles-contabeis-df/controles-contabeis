@@ -1,0 +1,16 @@
+﻿id_plano_acao,codigo_plano_acao,ano_plano_acao,modalidade_plano_acao,situacao_plano_acao,email_camara,data_aceite_plano_acao,codigo_banco_plano_acao,codigo_situacao_dado_bancario_plano_acao,descricao_situacao_dado_bancario_plano_acao,nome_banco_plano_acao,numero_agencia_plano_acao,dv_agencia_plano_acao,numero_conta_plano_acao,dv_conta_plano_acao,nome_parlamentar_emenda_plano_acao,ano_emenda_parlamentar_plano_acao,codigo_parlamentar_emenda_plano_acao,sequencial_emenda_parlamentar_plano_acao,numero_emenda_parlamentar_plano_acao,codigo_emenda_parlamentar_formatado_plano_acao,categoria_despesa_plano_acao,codigo_descricao_areas_politicas_publicas_plano_acao,descricao_programacao_orcamentaria_plano_acao,motivo_impedimento_plano_acao,valor_custeio_plano_acao,valor_investimento_plano_acao,id_agencia_conta,id_beneficiario,id_objeto,nome_objeto,detalhamento_objeto,id_programa
+900001,09032025-085264,2025,,CIENTE,,2025-08-11,,,,,,,,,Rafael Prudente,,,,202544530001,,,,,,0.0,10432612.08,,3857,,,,900002
+900002,09032024-068635,2024,,IMPEDIDO,,,,,,,,,,,Rafael Prudente,,,,202444530005,,,,,,0.0,6470792.0,,3857,,,,900002
+900003,09032024-075301,2024,,CIENTE,,2024-05-17,,,,,,,,,Prof. Paulo Fernando,,,,202444970005,,,,,,0.0,1455790.0,,3857,,,,900002
+900004,09032024-074660,2024,,CIENTE,,2024-05-16,,,,,,,,,Fred Linhares,,,,202443780013,,,,,,0.0,3285792.0,,3857,,,,900002
+900005,09032024-073591,2024,,IMPEDIDO,,,,,,,,,,,Leila Barros,,,,202440820007,,,,,,0.0,1500000.0,,3857,,,,900002
+900006,09032024-069122,2024,,CIENTE,,2024-05-17,,,,,,,,,Prof. Reginaldo Veras,,,,202444490013,,,,,,0.0,5000000.0,,3857,,,,900002
+900007,09032023-037105,2023,,CIENTE,,2023-06-02,,,,,,,,,Celina Leão,,,,202339340001,,,,,,0.0,16051700.0,,3857,,,,900002
+900008,09032022-017279,2022,,IMPEDIDO,,,,,,,,,,,Paulo Pimenta,,,,202219860001,,,,,,0.0,100000.0,,3857,,,,900001
+900009,09032022-019918,2022,,CIENTE,,2022-05-02,,,,,,,,,Celina Leão,,,,202239340002,,,,,,0.0,8819682.0,,3857,,,,900001
+900010,09032022-017203,2022,,IMPEDIDO,,,,,,,,,,,Rubens Otoni,,,,202219600006,,,,,,0.0,100000.0,,3857,,,,900001
+900011,09032022-016862,2022,,CIENTE,,2022-05-09,,,,,,,,,Professor Israel Batista,,,,202241690004,,,,,,0.0,700000.0,,3857,,,,900001
+900012,09032022-021151,2022,,CIENTE,,2022-05-18,,,,,,,,,Leila Barros,,,,202240820013,,,,,,0.0,300000.0,,3857,,,,900001
+900013,09032021-011975,2021,,CIENTE,,2021-07-30,,,,,,,,,Celina Leão,,,,202139340003,,,,,,0.0,100000.0,,3857,,,,900001
+900014,09032021-2-013956,2021,,CIENTE,,2021-12-24,,,,,,,,,Celina Leão,,,,202139340003,,,,,,0.0,1100000.0,,3857,,,,900001
+900015,0903-004598,2020,,CIENTE,,2020-05-22,,,,,,,,,Leila Barros,,,,202040820014,,,,,,0.0,500000.0,,3857,,,,900001

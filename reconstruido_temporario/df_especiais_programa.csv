@@ -1,0 +1,3 @@
+﻿id_programa,ano_programa,modalidade_programa,codigo_programa,id_orgao_superior_programa,sigla_orgao_superior_programa,cnpj_orgao_superior_programa,nome_orgao_superior_programa,id_orgao_programa,sigla_orgao_programa,cnpj_orgao_programa,nome_orgao_programa,id_unidade_gestora_programa,documentos_origem_programa,id_unidade_orcamentaria_responsavel_programa,data_inicio_ciencia_programa,data_fim_ciencia_programa,valor_necessidade_financeira_programa,valor_total_disponibilizado_programa,valor_impedido_programa,valor_a_disponibilizar_programa,valor_documentos_habeis_gerados_programa,valor_obs_geradas_programa,valor_disponibilidade_atual_programa
+900001,,,,,,,,,,,Ministério da Economia,,,,,,,,,,,,
+900002,,,,,,,,,,,Ministério da Fazenda,,,,,,,,,,,,

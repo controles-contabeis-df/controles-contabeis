@@ -21,6 +21,8 @@ from pathlib import Path
 import requests
 import pandas as pd
 
+from protecao_extracao import salvar_protegido
+
 PASTA_SAIDA = Path(__file__).resolve().parent
 UF_ALVO = "DF"
 
@@ -60,8 +62,33 @@ def buscar_por_id(base_url: str, endpoint: str, campo_id: str, valor_id) -> list
 
 def salvar(df: pd.DataFrame, nome_arquivo: str) -> None:
     caminho = PASTA_SAIDA / nome_arquivo
-    df.to_csv(caminho, index=False, encoding="utf-8-sig")
-    print(f"   -> {len(df)} registros salvos em {caminho.name}")
+    # protecao_extracao: nao troca arquivo com dados por resultado vazio/muito menor (queda > 30%)
+    if salvar_protegido(df, caminho, encoding="utf-8-sig"):
+        print(f"   -> {len(df)} registros salvos em {caminho.name}")
+
+
+# Colunas de cada arquivo de Transferencias Especiais. Se a API devolver vazio
+# (ocorreu a partir de 17/10/2026: /planos-acao-especiais e /executores-especiais
+# responderam 200 com 0 registros para todo o pais), o arquivo e gravado so com o
+# cabecalho - sem ele o pandas dava EmptyDataError e o painel nao era gerado.
+COLUNAS_ESPECIAIS = {
+    "df_especiais_plano_acao.csv": ["id_plano_acao", "codigo_plano_acao", "ano_plano_acao", "modalidade_plano_acao", "situacao_plano_acao", "email_camara", "data_aceite_plano_acao", "codigo_banco_plano_acao", "codigo_situacao_dado_bancario_plano_acao", "descricao_situacao_dado_bancario_plano_acao", "nome_banco_plano_acao", "numero_agencia_plano_acao", "dv_agencia_plano_acao", "numero_conta_plano_acao", "dv_conta_plano_acao", "nome_parlamentar_emenda_plano_acao", "ano_emenda_parlamentar_plano_acao", "codigo_parlamentar_emenda_plano_acao", "sequencial_emenda_parlamentar_plano_acao", "numero_emenda_parlamentar_plano_acao", "codigo_emenda_parlamentar_formatado_plano_acao", "categoria_despesa_plano_acao", "codigo_descricao_areas_politicas_publicas_plano_acao", "descricao_programacao_orcamentaria_plano_acao", "motivo_impedimento_plano_acao", "valor_custeio_plano_acao", "valor_investimento_plano_acao", "id_agencia_conta", "id_beneficiario", "id_objeto", "nome_objeto", "detalhamento_objeto", "id_programa"],
+    "df_especiais_executor.csv": ["id_executor", "cnpj_executor", "nome_executor", "objeto_executor", "vl_custeio_executor", "vl_investimento_executor", "ind_recursos_gerenciados_conta_especifica_executor", "codigo_banco_executor", "nome_banco_executor", "numero_agencia_executor", "numero_dv_agencia_executor", "nome_agencia_executor", "numero_conta_executor", "numero_dv_conta_executor", "codigo_situacao_dado_bancario_executor", "descricao_situacao_dado_bancario_executor", "id_plano_acao"],
+    "df_especiais_plano_trabalho.csv": ["id_plano_trabalho", "dt_hora_situacao_plano_trabalho", "situacao_plano_trabalho", "ind_orcamento_proprio_plano_trabalho", "data_inicio_execucao_plano_trabalho", "data_fim_execucao_plano_trabalho", "prazo_execucao_meses_plano_trabalho", "id_plano_acao", "classificacao_orcamentaria_pt", "ind_justificativa_prorrogacao_atraso_pt", "ind_justificativa_prorrogacao_paralizacao_pt", "justificativa_prorrogacao_paralizacao_pt", "dt_hora_pt_aprovado", "ind_orgao_analises_pendentes"],
+    "df_especiais_empenho.csv": ["id_empenho", "id_minuta_empenho", "numero_empenho", "situacao_empenho", "descricao_situacao_empenho", "tipo_documento_empenho", "descricao_tipo_documento_empenho", "status_processamento_empenho", "ug_responsavel_empenho", "ug_emitente_empenho", "descricao_ug_emitente_empenho", "fonte_recurso_empenho", "plano_interno_empenho", "ptres_empenho", "grupo_natureza_despesa_empenho", "natureza_despesa_empenho", "subitem_empenho", "categoria_despesa_empenho", "modalidade_despesa_empenho", "numero_ro_empenho", "data_emissao_empenho", "prioridade_desbloqueio_empenho", "valor_empenho", "id_plano_acao"],
+    "df_especiais_documento_habil.csv": ["id_dh", "id_minuta_documento_habil", "numero_documento_habil", "situacao_dh", "descricao_situacao_dh", "tipo_documento_dh", "ug_emitente_dh", "descricao_ug_emitente_dh", "data_vencimento_dh", "data_emissao_dh", "ug_pagadora_dh", "descricao_ug_pagadora_dh", "variacao_patrimonial_diminuta_dh", "passivo_transferencia_constitucional_legal_dh", "descricao_centro_custo_dh", "codigo_siorg_centro_custo_dh", "mes_referencia_centro_custo_dh", "ano_referencia_centro_custo_dh", "mes_ano_referencia_centro_custo_dh", "ug_beneficiada_centro_custo_dh", "descricao_ug_beneficiada_centro_custo_dh", "valor_dh", "valor_rateio_dh", "valor_custo_centro_custo_dh", "id_empenho"],
+    "df_especiais_ordem_pagamento.csv": ["id_op_ob", "data_emissao_op", "numero_ordem_pagamento", "vinculacao_op", "situacao_op", "descricao_situacao_op", "data_situacao_op", "data_emissao_ob", "numero_ordem_bancaria", "numero_ordem_lancamento", "data_assinatura_ordenador_despesa_ob", "data_assinatura_gestor_financeiro_ob", "id_dh"],
+    "df_especiais_programa.csv": ["id_programa", "ano_programa", "modalidade_programa", "codigo_programa", "id_orgao_superior_programa", "sigla_orgao_superior_programa", "cnpj_orgao_superior_programa", "nome_orgao_superior_programa", "id_orgao_programa", "sigla_orgao_programa", "cnpj_orgao_programa", "nome_orgao_programa", "id_unidade_gestora_programa", "documentos_origem_programa", "id_unidade_orcamentaria_responsavel_programa", "data_inicio_ciencia_programa", "data_fim_ciencia_programa", "valor_necessidade_financeira_programa", "valor_total_disponibilizado_programa", "valor_impedido_programa", "valor_a_disponibilizar_programa", "valor_documentos_habeis_gerados_programa", "valor_obs_geradas_programa", "valor_disponibilidade_atual_programa"],
+}
+
+
+def salvar_especiais(registros, nome_arquivo: str) -> None:
+    """Como salvar(), garantindo o cabecalho das colunas quando a API devolve vazio
+    (a protecao central decide se mantem o arquivo anterior)."""
+    df = pd.DataFrame(registros)
+    if df.empty:
+        df = pd.DataFrame(columns=COLUNAS_ESPECIAIS[nome_arquivo])
+    salvar(df, nome_arquivo)
 
 
 # ---------------------------------------------------------------------------
@@ -157,12 +184,12 @@ def extrair_especiais():
                         )
         time.sleep(0.1)
 
-    salvar(pd.DataFrame(planos), "df_especiais_plano_acao.csv")
-    salvar(pd.DataFrame(executores), "df_especiais_executor.csv")
-    salvar(pd.DataFrame(planos_trabalho), "df_especiais_plano_trabalho.csv")
-    salvar(pd.DataFrame(empenhos), "df_especiais_empenho.csv")
-    salvar(pd.DataFrame(documentos), "df_especiais_documento_habil.csv")
-    salvar(pd.DataFrame(pagamentos), "df_especiais_ordem_pagamento.csv")
+    salvar_especiais(planos, "df_especiais_plano_acao.csv")
+    salvar_especiais(executores, "df_especiais_executor.csv")
+    salvar_especiais(planos_trabalho, "df_especiais_plano_trabalho.csv")
+    salvar_especiais(empenhos, "df_especiais_empenho.csv")
+    salvar_especiais(documentos, "df_especiais_documento_habil.csv")
+    salvar_especiais(pagamentos, "df_especiais_ordem_pagamento.csv")
 
     # /programas-especiais traz documentos_origem_programa, usado para excluir
     # registros de "Termo de Fomento" (conforme regra de negocio do setor de
@@ -172,7 +199,7 @@ def extrair_especiais():
     programas = []
     for id_programa in ids_programa:
         programas.extend(buscar_por_id(base, "programas-especiais", "id_programa", id_programa))
-    salvar(pd.DataFrame(programas), "df_especiais_programa.csv")
+    salvar_especiais(programas, "df_especiais_programa.csv")
 
 
 # ---------------------------------------------------------------------------

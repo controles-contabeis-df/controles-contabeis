@@ -8,12 +8,26 @@ $log     = Join-Path $logDir "atualizacao_$(Get-Date -Format 'yyyyMMdd').log"
 
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 
+# Falhas do dia (lidas por alerta_rotina.py, que envia o aviso por e-mail)
+$arqFalhas = Join-Path $logDir "falhas_$(Get-Date -Format 'yyyyMMdd').txt"
+$arqAlertasExtracao = Join-Path $logDir "alertas_extracao_$(Get-Date -Format 'yyyyMMdd').txt"
+Remove-Item $arqFalhas, $arqAlertasExtracao -ErrorAction SilentlyContinue
+
 function Executar-Script($nome) {
     $inicio = Get-Date
     $msg = "[$inicio] Iniciando: $nome"
     Write-Output $msg; Add-Content -Path $log -Value $msg
     $saida = & $python (Join-Path $pasta $nome) 2>&1
+    $codigo = $LASTEXITCODE
     $saida | ForEach-Object { Add-Content -Path $log -Value $_ }
+    # Falha = codigo de saida diferente de zero OU traceback do Python na saida
+    $teveTraceback = [bool]($saida | ForEach-Object { "$_" } | Select-String -SimpleMatch 'Traceback (most recent call last)' -Quiet)
+    if ($codigo -ne 0 -or $teveTraceback) {
+        $ultima = ($saida | ForEach-Object { "$_" } | Where-Object { $_.Trim() } | Select-Object -Last 1)
+        Add-Content -Path $arqFalhas -Value "$nome (codigo de saida $codigo) - $ultima"
+        $msgF = "[$(Get-Date)] FALHA: $nome (codigo $codigo)"
+        Write-Output $msgF; Add-Content -Path $log -Value $msgF
+    }
     $fim = Get-Date
     $duracao = ($fim - $inicio).ToString("mm\:ss")
     $msg2 = "[$fim] Concluido: $nome (duracao: $duracao)"
@@ -38,6 +52,9 @@ $gitOut = git -C $pasta pull origin main --rebase --autostash 2>&1; $gitOut | Fo
 
 # Bloqueia pushes individuais dos scripts — um único push consolidado ao final
 $env:NO_GIT_PUSH = "1"
+
+# Copia diaria das extracoes (14 dias de retencao) ANTES de extrair de novo
+Executar-Script "backup_extracoes.py"
 
 Executar-Script "extrair_contas_transitorias.py"
 Executar-Script "extrair_disponibilidades.py"
@@ -92,3 +109,9 @@ $alerta2Out | ForEach-Object { Add-Content -Path $log -Value $_ }
 
 $alertaFim = "[$((Get-Date))] Verificação de equações concluída."
 Write-Output $alertaFim; Add-Content -Path $log -Value $alertaFim
+
+# Aviso por e-mail se algum script falhou ou se alguma extracao veio suspeita (arquivo anterior mantido)
+$avisoMsg = "[$((Get-Date))] Verificando falhas da rotina (aviso por e-mail)..."
+Write-Output $avisoMsg; Add-Content -Path $log -Value $avisoMsg
+$avisoOut = & $python (Join-Path $pasta "alerta_rotina.py") 2>&1
+$avisoOut | ForEach-Object { Add-Content -Path $log -Value $_ }

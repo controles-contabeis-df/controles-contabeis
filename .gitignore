@@ -43,3 +43,9 @@ Relatorio_*.xlsx
 # Scripts utilitários/de teste (não são painéis publicados)
 autorizar_gmail.py
 teste_email.py
+
+# Copias diarias das extracoes (rotina; 14 dias)
+historico/
+
+# Reconstrucao temporaria de Especiais: versionar (pequena, evita nova perda)
+!reconstruido_temporario/*.csv
