@@ -26,7 +26,20 @@ PASTA = Path(__file__).resolve().parent
 
 
 def carregar(nome, **kwargs):
-    return pd.read_csv(PASTA / nome, low_memory=False, **kwargs)
+    """Le o CSV de extracao. Se o arquivo estiver SEM dados (ex.: API de Especiais devolvendo
+    vazio desde 17/10/2026) e houver reconstrucao temporaria em reconstruido_temporario/, usa-a;
+    assim que a extracao trouxer dados reais, a reconstrucao deixa de ser usada sozinha."""
+    try:
+        df = pd.read_csv(PASTA / nome, low_memory=False, **kwargs)
+    except pd.errors.EmptyDataError:
+        df = pd.DataFrame()
+    temp = PASTA / "reconstruido_temporario" / nome
+    if df.empty and temp.exists():
+        print(f"   [aviso] {nome} sem dados na extracao; usando reconstrucao TEMPORARIA (painel de 16/10/2026)")
+        return pd.read_csv(temp, low_memory=False, **kwargs)
+    if df.empty and not (PASTA / nome).exists():
+        raise FileNotFoundError(nome)
+    return df
 
 
 def carregar_com_colunas(nome, colunas, **kwargs):

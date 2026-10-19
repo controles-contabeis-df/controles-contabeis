@@ -12,6 +12,8 @@ import oracledb
 import pandas as pd
 from pathlib import Path
 
+from protecao_extracao import salvar_protegido
+
 PASTA = Path(__file__).resolve().parent
 
 ORACLE_USER = "usefp79"
@@ -46,12 +48,12 @@ def main():
     )
 
     saida = PASTA / "df_siggo_transferencia.csv"
-    df.to_csv(saida, index=False, encoding="utf-8-sig")
-    print(f"  -> {len(df)} registros salvos em {saida.name}")
+    if salvar_protegido(df, saida, encoding="utf-8-sig"):
+        print(f"  -> {len(df)} registros salvos em {saida.name}")
 
     saida_ug = PASTA / "unidadegestora_bruto.csv"
-    df_ug.to_csv(saida_ug, index=False, encoding="utf-8-sig")
-    print(f"  -> {len(df_ug)} UGs salvas em {saida_ug.name}")
+    if salvar_protegido(df_ug, saida_ug, encoding="utf-8-sig"):
+        print(f"  -> {len(df_ug)} UGs salvas em {saida_ug.name}")
 
 
 if __name__ == "__main__":
