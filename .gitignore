@@ -49,3 +49,7 @@ historico/
 
 # Reconstrucao temporaria de Especiais: versionar (pequena, evita nova perda)
 !reconstruido_temporario/*.csv
+
+# Planilhas por UG e extracao pontual (uso interno; nao publicar)
+pendencias_por_ug_*.xlsx
+extracao_pontual/
