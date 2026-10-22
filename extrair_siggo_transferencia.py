@@ -8,17 +8,22 @@ o papel, como COCONCENTE, nao se mostraram confiaveis isoladamente). O
 cruzamento com o TransfereGov e o filtro fino ficam para uma etapa posterior.
 """
 
+import os
+
 import oracledb
 import pandas as pd
+from dotenv import load_dotenv
 from pathlib import Path
 
 from protecao_extracao import salvar_protegido
 
 PASTA = Path(__file__).resolve().parent
 
-ORACLE_USER = "usefp79"
-ORACLE_PASS = "bo39ra"
-ORACLE_DSN = "10.69.1.118:1521/oraprd06"
+# Credenciais lidas do arquivo .env (fora do repositorio; ver .gitignore)
+load_dotenv(PASTA / ".env")
+ORACLE_USER = os.environ["ORACLE_USER"]
+ORACLE_PASS = os.environ["ORACLE_PASS"]
+ORACLE_DSN = os.environ["ORACLE_DSN"]
 INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 
 
