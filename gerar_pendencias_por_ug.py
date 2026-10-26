@@ -20,7 +20,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-import gerar_painel_transferegov_df as g
+import painel_transferegov_base as g
 import gerar_relatorio_pendencias_transferegov as rel
 
 COLUNAS = ["UG", "Situação", "Nº Transferência (SIGGo)", "Identificador (TransfereGov)", "Modalidade", "Concedente",

@@ -35,6 +35,17 @@ function Executar-Script($nome) {
     Add-Content -Path $log -Value ""
 }
 
+# Publica no GitHub tudo o que mudou (um commit + push). Usada ao fim de cada fase.
+function Publicar-Paineis($mensagemCommit) {
+    $pushMsg = "[$((Get-Date))] Publicando no GitHub ($mensagemCommit)..."
+    Write-Output $pushMsg; Add-Content -Path $log -Value $pushMsg
+    git -C $pasta add -A
+    git -C $pasta commit -m "$mensagemCommit -- $(Get-Date -Format 'dd/MM/yyyy HH:mm')"
+    $pushOut = git -C $pasta push origin main 2>&1; $pushOut | ForEach-Object { Add-Content -Path $log -Value $_ }
+    $pushOk = "[$((Get-Date))] Publicado com sucesso. -> https://controles-contabeis-df.github.io/controles-contabeis/"
+    Write-Output $pushOk; Add-Content -Path $log -Value $pushOk
+}
+
 $cabecalho = @"
 ============================================================
 ATUALIZACAO DOS PAINEIS — $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')
@@ -73,28 +84,11 @@ Executar-Script "extrair_conciliacao_bens_moveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_intangiveis_sisgepat.py"
 Executar-Script "extrair_correspondencia_ativo_passivo.py"
 Executar-Script "extrair_correspondencia_ativo_passivo_saldo.py"
-Executar-Script "extrair_transferegov_df.py"
-Executar-Script "extrair_siggo_transferencia.py"
-Executar-Script "gerar_painel_transferegov_df.py"
 
 $env:NO_GIT_PUSH = ""
 
-# Push consolidado — dispara apenas UM build do GitHub Pages por dia
-$pushMsg = "[$((Get-Date))] Publicando todos os paineis no GitHub (push consolidado)..."
-Write-Output $pushMsg; Add-Content -Path $log -Value $pushMsg
-git -C $pasta add -A
-$commitMsg = "auto: atualiza paineis -- $(Get-Date -Format 'dd/MM/yyyy HH:mm')"
-git -C $pasta commit -m $commitMsg
-$pushOut = git -C $pasta push origin main 2>&1; $pushOut | ForEach-Object { Add-Content -Path $log -Value $_ }
-$pushOk = "[$((Get-Date))] Publicado com sucesso. -> https://controles-contabeis-df.github.io/controles-contabeis/"
-Write-Output $pushOk; Add-Content -Path $log -Value $pushOk
-
-$rodape = @"
-============================================================
-TODOS OS PAINEIS ATUALIZADOS — $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')
-============================================================
-"@
-Write-Output $rodape; Add-Content -Path $log -Value $rodape
+# FASE A: publica todos os paineis, exceto o do TransfereGov (que depende da extracao mais lenta)
+Publicar-Paineis "auto: atualiza paineis"
 
 # Verificação de equações intragovernamentais e envio de alerta por e-mail
 $alertaMsg = "[$((Get-Date))] Verificando equações intragovernamentais (alerta por e-mail)..."
@@ -109,6 +103,25 @@ $alerta2Out | ForEach-Object { Add-Content -Path $log -Value $_ }
 
 $alertaFim = "[$((Get-Date))] Verificação de equações concluída."
 Write-Output $alertaFim; Add-Content -Path $log -Value $alertaFim
+
+# FASE B: TransfereGov (a extracao leva cerca de 1h15 e a API oscila). Fica por ultimo para que a
+# lentidao dela nunca impeca a atualizacao dos demais paineis.
+$env:NO_GIT_PUSH = "1"
+Executar-Script "extrair_transferegov_df.py"
+Executar-Script "extrair_siggo_transferencia.py"
+Executar-Script "gerar_painel_transferegov_df.py"
+$env:NO_GIT_PUSH = ""
+Publicar-Paineis "auto: atualiza painel TransfereGov"
+
+$rodape = @"
+============================================================
+TODOS OS PAINEIS ATUALIZADOS — $(Get-Date -Format 'dd/MM/yyyy HH:mm:ss')
+============================================================
+"@
+Write-Output $rodape; Add-Content -Path $log -Value $rodape
+
+# Monitoramento semanal de TEDs com mencao ao GDF (o proprio script so executa se a ultima execucao tiver 6+ dias)
+Executar-Script "monitorar_ted_gdf.py"
 
 # Aviso por e-mail se algum script falhou ou se alguma extracao veio suspeita (arquivo anterior mantido)
 $avisoMsg = "[$((Get-Date))] Verificando falhas da rotina (aviso por e-mail)..."
