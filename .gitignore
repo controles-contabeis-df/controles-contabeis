@@ -53,3 +53,6 @@ historico/
 # Planilhas por UG e extracao pontual (uso interno; nao publicar)
 pendencias_por_ug_*.xlsx
 extracao_pontual/
+
+# Estado do monitoramento semanal de TEDs (uso interno)
+ted_monitor/

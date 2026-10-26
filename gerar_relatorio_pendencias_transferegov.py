@@ -24,7 +24,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-import gerar_painel_transferegov_df as g
+import painel_transferegov_base as g
 
 COLUNAS = ["Fonte", "Identificador", "Concedente", "Beneficiário / Órgão executor", "Objeto",
            "Data de Celebração", "Data da Proposta", "Valor Global (R$)", "Valor Repassado (R$)", "Situação", "Nº da Emenda",
