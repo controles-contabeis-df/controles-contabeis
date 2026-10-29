@@ -44,29 +44,85 @@ WITH contas_permitidas AS (
     FROM {schema}VCONTACONTABIL
     WHERE INSISCONTABIL IN ('F', 'C', 'O')
 ),
-base AS (
+/* ── Catálogo INCONTACORRENTE (SIGGO) aplicado à extração de fonte ───────────
+   Levantamento empírico de 2026-10-28, validado contra FONTERECURSO nas contas
+   de Ativo (1XXXXXXXX) e Passivo (22XXXXXXX) Financeiro do painel:
+
+   - Tipos 63 (NE+Fonte NE+Credor) e 76 (NE+Fonte+UG/GESTAO): a NE ocupa os 11
+     primeiros caracteres (AAAA+"NE"+sequência) e a fonte vem nas posições
+     12–20 (9 dígitos). Match de 100% contra FONTERECURSO.
+   - Tipos 09 (Fonte de Recurso), 49 (Fonte+Domicílio Bancário), 50 (Fonte+
+     Credor), 67 (Fonte+Ano+Credor) e 69 (Fonte+UG+Gestão): a fonte vem nos
+     9 primeiros dígitos (posições 1–9). Match de 100% contra FONTERECURSO
+     nos registros que já carregam esse prefixo (ex.: tipo 67 nas linhas
+     "fonteadas" — as do formato antigo, sem prefixo, não batem e caem no
+     fallback).
+   - Demais tipos (00,01,02,04,06,08,10,24,25, etc.): sem fonte embutida em
+     nenhuma posição (varredura exaustiva de offsets, 0% de match).
+
+   Regra: aplicamos essa extração multi-tipo SOMENTE às contas de Ativo e
+   Passivo Financeiro (100000000–229999999). Para as demais contas do painel
+   (RPNP = 631100000 e 721190300), preservamos a lógica original (somente o
+   padrão NE, já em produção, com fallback para a COFONTE bruta) sem alteração.
+
+   Para AF/PF, se nenhum padrão reconhecível for encontrado no COCONTACORRENTE,
+   NÃO caímos mais na COFONTE bruta — retornamos Fonte 0. Motivo: em ajustes
+   manuais de "transposição de saldo" entre contas (ex.: 218810401 -> 218810499),
+   o SIGGO exige que o preparador informe uma COFONTE no lançamento só para
+   viabilizar o ajuste — esse valor não reflete uma fonte real do COCONTACORRENTE
+   e não deve ser usado. Ver caso UG 10101 (Câmara Legislativa), conta 218810401,
+   CC "202343262746000186": COFONTE bruta setada manualmente como 973000000, mas
+   o CC não tem o prefixo de fonte — deve retornar Fonte 0, não 973000000. */
+base0 AS (
     SELECT
-        s.COGESTAO          AS COGESTAO,
-        s.COUG              AS COUG,
-        /* Quando o COCONTACORRENTE começa com ano+"NE" (Nota de Empenho: AAAA+NE+seq, 11 caracteres)
-           e tem pelo menos 20 caracteres, os 9 dígitos seguintes (posições 12–20) trazem a fonte de
-           recurso embutida no próprio documento — validado 100% contra FONTERECURSO nos tipos 63 e 76.
-           Nesses casos a s.COFONTE bruta pode trazer a fonte de DESTINO do recurso (ex.: fonte do
-           IPREV que recebeu o repasse) em vez da fonte de origem da UG que fez o lançamento. Ver caso
-           DETRAN/IPREV (fontes 266000000/266100000 aparecendo indevidamente sob a UG 220201). */
-        CASE
-            WHEN REGEXP_LIKE(TRIM(TO_CHAR(s.COCONTACORRENTE)), '^[0-9]{4}NE')
-             AND LENGTH(TRIM(TO_CHAR(s.COCONTACORRENTE))) >= 20
-            THEN TO_NUMBER(SUBSTR(TRIM(TO_CHAR(s.COCONTACORRENTE)), 12, 9))
-            ELSE s.COFONTE
-        END                 AS COFONTE,
+        s.COGESTAO,
+        s.COUG,
         s.COCONTACONTABIL,
-        (s.VACREDITO - s.VADEBITO) AS VALOR_CONTABIL
+        s.COFONTE                              AS COFONTE_BRUTA,
+        TRIM(TO_CHAR(s.COCONTACORRENTE))       AS CC,
+        cc.INCONTACORRENTE,
+        (s.VACREDITO - s.VADEBITO)             AS VALOR_CONTABIL
     FROM {schema}VSALDOCONTABIL s
     INNER JOIN contas_permitidas cp
         ON s.COCONTACONTABIL = cp.COCONTACONTABIL
+    LEFT JOIN {schema}VCONTACONTABIL cc
+        ON cc.COCONTACONTABIL = s.COCONTACONTABIL
     {filtro_ug}
     {filtro_mes}
+),
+base1 AS (
+    SELECT
+        b.*,
+        /* Candidato via padrão NE (tipos 63/76 e qualquer CC no mesmo formato) */
+        CASE
+            WHEN REGEXP_LIKE(b.CC, '^[0-9]{4}NE') AND LENGTH(b.CC) >= 20
+            THEN TO_NUMBER(SUBSTR(b.CC, 12, 9))
+        END AS CAND_FONTE_NE,
+        /* Candidato via padrão "fonte na frente" (tipos 09/49/50/67/69) — só AF/PF */
+        CASE
+            WHEN b.COCONTACONTABIL BETWEEN 100000000 AND 229999999
+             AND b.INCONTACORRENTE IN ('09', '49', '50', '67', '69')
+             AND REGEXP_LIKE(SUBSTR(b.CC, 1, 9), '^[0-9]{9}$')
+            THEN TO_NUMBER(SUBSTR(b.CC, 1, 9))
+        END AS CAND_FONTE_FRENTE
+    FROM base0 b
+),
+base AS (
+    SELECT
+        b.COGESTAO,
+        b.COUG,
+        b.COCONTACONTABIL,
+        CASE
+            WHEN b.COCONTACONTABIL BETWEEN 100000000 AND 229999999
+            THEN COALESCE(ft_ne.COFONTE, ft_frente.COFONTE, 0)
+            ELSE COALESCE(ft_ne.COFONTE, b.COFONTE_BRUTA)
+        END AS COFONTE,
+        b.VALOR_CONTABIL
+    FROM base1 b
+    LEFT JOIN {schema}FONTERECURSO ft_ne
+        ON ft_ne.COFONTE = b.CAND_FONTE_NE
+    LEFT JOIN {schema}FONTERECURSO ft_frente
+        ON ft_frente.COFONTE = b.CAND_FONTE_FRENTE
 ),
 saldos AS (
     SELECT
