@@ -56,7 +56,7 @@ from dotenv import load_dotenv
 
 load_dotenv(PASTA / ".env")
 REMETENTE = os.environ["EMAIL_REMETENTE"]
-DESTINATARIOS = ["clarissa.barbosa@economia.df.gov.br"]
+DESTINATARIOS = [d.strip() for d in os.environ["DESTINATARIOS_ROTINA"].split(",") if d.strip()]
 
 # Orgaos e expressoes do GDF (texto sem acento e em maiusculas). Tribunal de Justica e Ministerio Publico do
 # DF e Territorios e a Superintendencia de Agricultura no DF sao federais e nao entram.

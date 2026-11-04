@@ -27,7 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv(PASTA / ".env")
 REMETENTE = os.environ["EMAIL_REMETENTE"]
-DESTINATARIOS = ["clarissa.barbosa@economia.df.gov.br"]
+DESTINATARIOS = [d.strip() for d in os.environ["DESTINATARIOS_ROTINA"].split(",") if d.strip()]
 
 
 def ler(nome):

@@ -35,10 +35,7 @@ TOKEN  = PASTA / "gmail_token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 REMETENTE     = os.environ["EMAIL_REMETENTE"]
-DESTINATARIOS = [
-    "clarissa.barbosa@economia.df.gov.br",
-    "daniel.mello@economia.df.gov.br",
-]
+DESTINATARIOS = [d.strip() for d in os.environ["DESTINATARIOS_INTRA"].split(",") if d.strip()]
 
 # Data a partir da qual o monitoramento é válido (lançamentos anteriores são ignorados)
 INICIO_MONITORAMENTO = date(2026, 8, 14)

@@ -57,20 +57,28 @@ python extrair_<nome_do_painel>.py
 | Componente | Descrição |
 |------------|-----------|
 | **Python 3.13+** | Linguagem principal dos scripts de extração |
-| **Oracle Instant Client 23** | Instalado em `C:\oracle\instantclient_23_0` |
+| **Oracle Instant Client 23** | Instalado localmente (caminho configurado nos scripts) |
 | **oracledb** | Biblioteca Python para conexão Oracle (`pip install oracledb`) |
 | **pandas** | Manipulação dos dados (`pip install pandas`) |
 | **python-dotenv** | Leitura das credenciais (`pip install python-dotenv`) |
-| **Arquivo `.env`** | Credenciais de acesso ao SIGGO/Oracle — **não versionado** |
+| **Arquivo `.env`** | Credenciais (SIGGO/Oracle, GitHub, e-mail) — **não versionado** |
 
 ### Estrutura do `.env`
 
-O arquivo `.env` deve existir na mesma pasta dos scripts e conter:
+O arquivo `.env` deve existir na mesma pasta dos scripts e conter (valores reais ficam só na máquina local):
 
 ```
 ORACLE_USER=seu_usuario
 ORACLE_PASS=sua_senha
 ORACLE_DSN=host:porta/servico
+GITHUB_TOKEN=seu_token
+GITHUB_USER=usuario_ou_organizacao
+GITHUB_REPO=nome_do_repositorio
+GITHUB_BRANCH=main
+EMAIL_REMETENTE=conta_que_envia_os_avisos
+DESTINATARIOS_ROTINA=email1,email2
+DESTINATARIOS_INTRA=email1,email2
+DESTINATARIOS_EMPRESAS=email1,email2
 ```
 
 > ⚠️ **O arquivo `.env` nunca deve ser versionado ou compartilhado.** Está listado no `.gitignore`.
@@ -85,7 +93,6 @@ ORACLE_DSN=host:porta/servico
 ├── atualizar_paineis.ps1               ← Script de atualização em lote
 ├── extrair_*.py                        ← Scripts de extração (um por painel)
 ├── *.html                              ← Painéis gerados (publicados no GitHub Pages)
-├── .env                                ← Credenciais Oracle (local, não versionado)
 └── .gitignore
 ```
 

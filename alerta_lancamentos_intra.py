@@ -35,10 +35,7 @@ TOKEN  = PASTA / "gmail_token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 REMETENTE     = os.environ["EMAIL_REMETENTE"]
-DESTINATARIOS = [
-    "clarissa.barbosa@economia.df.gov.br",
-    "daniel.mello@economia.df.gov.br",
-]
+DESTINATARIOS = [d.strip() for d in os.environ["DESTINATARIOS_INTRA"].split(",") if d.strip()]
 
 MESES = {1:"Janeiro",2:"Fevereiro",3:"Março",4:"Abril",5:"Maio",6:"Junho",
          7:"Julho",8:"Agosto",9:"Setembro",10:"Outubro",11:"Novembro",12:"Dezembro"}
