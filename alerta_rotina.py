@@ -22,7 +22,11 @@ from pathlib import Path
 PASTA = Path(__file__).resolve().parent
 TOKEN = PASTA / "gmail_token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-REMETENTE = "contabilidadegeraldodf@gmail.com"
+import os
+from dotenv import load_dotenv
+
+load_dotenv(PASTA / ".env")
+REMETENTE = os.environ["EMAIL_REMETENTE"]
 DESTINATARIOS = ["clarissa.barbosa@economia.df.gov.br"]
 
 

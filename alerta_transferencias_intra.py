@@ -34,7 +34,7 @@ INSTANT_CLIENT_DIR = r"C:\oracle\instantclient_23_0"
 TOKEN  = PASTA / "gmail_token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
-REMETENTE     = "contabilidadegeraldodf@gmail.com"
+REMETENTE     = os.environ["EMAIL_REMETENTE"]
 DESTINATARIOS = [
     "clarissa.barbosa@economia.df.gov.br",
     "daniel.mello@economia.df.gov.br",

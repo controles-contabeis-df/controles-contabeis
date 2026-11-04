@@ -26,7 +26,7 @@ ORACLE_USER = os.environ["ORACLE_USER"]
 ORACLE_PASS = os.environ["ORACLE_PASS"]
 ORACLE_DSN  = os.environ["ORACLE_DSN"]
 
-REMETENTE    = "contabilidadegeraldodf@gmail.com"
+REMETENTE    = os.environ["EMAIL_REMETENTE"]
 DESTINATARIOS = [
     "leonardo.marchioni@economia.df.gov.br",
     "clarissa.barbosa@economia.df.gov.br",

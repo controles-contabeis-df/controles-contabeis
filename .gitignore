@@ -1,3 +1,26 @@
+# === LISTA PERMITIDA: por padrao NADA sobe; so o que for liberado abaixo ===
+*
+!*/
+!*.html
+!*.py
+!*.ps1
+!README.md
+!.gitignore
+!.nojekyll
+
+# === Bloqueios especificos (valem sobre a lista permitida) ===
+Impostos_Retidos_Recolhidos_GDF/
+reconstruido_temporario/
+extracao_pontual/
+ted_monitor/
+historico/
+tools/
+*.bak.py
+*.bak_*.py
+*_teste.html
+*_teste.py
+prototipo_*.py
+
 # Credenciais — nunca versionar
 .env
 gmail_credentials.json
@@ -47,8 +70,6 @@ teste_email.py
 # Copias diarias das extracoes (rotina; 14 dias)
 historico/
 
-# Reconstrucao temporaria de Especiais: versionar (pequena, evita nova perda)
-!reconstruido_temporario/*.csv
 
 # Planilhas por UG e extracao pontual (uso interno; nao publicar)
 pendencias_por_ug_*.xlsx

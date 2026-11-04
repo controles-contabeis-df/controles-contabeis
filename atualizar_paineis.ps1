@@ -2,7 +2,7 @@
 # Executado pelo Agendador de Tarefas diariamente às 11:00
 
 $pasta   = $PSScriptRoot
-$python  = "C:\Users\clarissa.barbosa\AppData\Local\Programs\Python\Python313\python.exe"
+$python  = Join-Path $env:LOCALAPPDATA "Programs\Python\Python313\python.exe"
 $logDir  = Join-Path $pasta "logs"
 $log     = Join-Path $logDir "atualizacao_$(Get-Date -Format 'yyyyMMdd').log"
 
@@ -39,7 +39,8 @@ function Executar-Script($nome) {
 function Publicar-Paineis($mensagemCommit) {
     $pushMsg = "[$((Get-Date))] Publicando no GitHub ($mensagemCommit)..."
     Write-Output $pushMsg; Add-Content -Path $log -Value $pushMsg
-    git -C $pasta add -A
+    git -C $pasta add -u
+    git -C $pasta add -- "*.html" "*.py" "*.ps1" "README.md" ".gitignore" ".nojekyll"
     git -C $pasta commit -m "$mensagemCommit -- $(Get-Date -Format 'dd/MM/yyyy HH:mm')"
     $pushOut = git -C $pasta push origin main 2>&1; $pushOut | ForEach-Object { Add-Content -Path $log -Value $_ }
     $pushOk = "[$((Get-Date))] Publicado com sucesso. -> https://controles-contabeis-df.github.io/controles-contabeis/"

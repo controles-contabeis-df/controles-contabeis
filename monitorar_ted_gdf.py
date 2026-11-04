@@ -51,7 +51,11 @@ ESTADO = DADOS / "estado.json"
 BASE = "https://api-publica.transferegov.gestao.gov.br/ted"
 TOKEN = PASTA / "gmail_token.json"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
-REMETENTE = "contabilidadegeraldodf@gmail.com"
+import os
+from dotenv import load_dotenv
+
+load_dotenv(PASTA / ".env")
+REMETENTE = os.environ["EMAIL_REMETENTE"]
 DESTINATARIOS = ["clarissa.barbosa@economia.df.gov.br"]
 
 # Orgaos e expressoes do GDF (texto sem acento e em maiusculas). Tribunal de Justica e Ministerio Publico do
