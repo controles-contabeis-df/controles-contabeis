@@ -124,6 +124,41 @@ Write-Output $rodape; Add-Content -Path $log -Value $rodape
 # Monitoramento semanal de TEDs com mencao ao GDF (o proprio script so executa se a ultima execucao tiver 6+ dias)
 Executar-Script "monitorar_ted_gdf.py"
 
+# Confere se o GitHub Pages concluiu o build do ultimo envio; se falhou, pede nova construcao.
+# Se persistir o erro, registra em falhas_AAAAMMDD.txt (o alerta_rotina.py avisa por e-mail).
+function Verificar-Pages {
+    function Log-Pages($t) { $m = "[$(Get-Date)] Pages: $t"; Write-Output $m; Add-Content -Path $log -Value $m }
+    try {
+        $cfg = @{}
+        Get-Content (Join-Path $pasta ".env") | ForEach-Object {
+            if ($_ -match '^\s*(GITHUB_TOKEN|GITHUB_USER|GITHUB_REPO)\s*=\s*(.*)$') { $cfg[$matches[1]] = $matches[2].Trim().Trim('"').Trim("'") }
+        }
+        if (-not $cfg['GITHUB_TOKEN'] -or -not $cfg['GITHUB_USER'] -or -not $cfg['GITHUB_REPO']) { Log-Pages "verificacao ignorada (GITHUB_* ausente no .env)"; return }
+        $h = @{ Authorization = "Bearer $($cfg['GITHUB_TOKEN'])"; Accept = "application/vnd.github+json"; "User-Agent" = "atualizar_paineis" }
+        $url = "https://api.github.com/repos/$($cfg['GITHUB_USER'])/$($cfg['GITHUB_REPO'])/pages/builds"
+        $sha = (git -C $pasta rev-parse HEAD).Trim()
+        for ($tentativa = 1; $tentativa -le 2; $tentativa++) {
+            $final = $null
+            $limite = (Get-Date).AddMinutes(14)
+            while ((Get-Date) -lt $limite) {
+                $b = Invoke-RestMethod -Uri "$url/latest" -Headers $h -TimeoutSec 60
+                if ($b.commit -eq $sha -and $b.status -in @('built', 'errored')) { $final = $b.status; break }
+                Start-Sleep -Seconds 30
+            }
+            if ($final -eq 'built') { Log-Pages "build concluido com sucesso (commit $($sha.Substring(0,7)))."; return }
+            if ($tentativa -eq 1) {
+                Log-Pages "build $(if ($final) { $final } else { 'sem resposta em 14 min' }); pedindo nova construcao..."
+                Invoke-RestMethod -Method Post -Uri $url -Headers $h -TimeoutSec 60 | Out-Null
+            }
+        }
+        Log-Pages "FALHA: o build do GitHub Pages nao concluiu apos nova tentativa (commit $($sha.Substring(0,7)))."
+        Add-Content -Path $arqFalhas -Value "GitHub Pages: build nao concluiu apos nova tentativa (commit $($sha.Substring(0,7))) - o site pode estar desatualizado"
+    } catch {
+        Log-Pages "nao foi possivel verificar ($($_.Exception.Message))"
+    }
+}
+Verificar-Pages
+
 # Aviso por e-mail se algum script falhou ou se alguma extracao veio suspeita (arquivo anterior mantido)
 $avisoMsg = "[$((Get-Date))] Verificando falhas da rotina (aviso por e-mail)..."
 Write-Output $avisoMsg; Add-Content -Path $log -Value $avisoMsg
