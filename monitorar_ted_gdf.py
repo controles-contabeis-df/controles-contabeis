@@ -12,6 +12,9 @@ O que faz:
   1. Baixa os planos de acao do TED (todos) e compara com a execucao anterior (ted_monitor/estado.json).
   2. Para planos NOVOS ou ALTERADOS (situacao, valor, vigencia, objeto), baixa metas, etapas, analises e
      pareceres e procura termos do GDF (padroes em PADRAO_GDF).
+  2b. Cada mencao e FORTE (palavra de papel junto ao termo, ou termo em meta/etapa) ou FRACA (citacao de passagem,
+     ex.: lista de parceiros ou referencia bibliografica). So mencoes fortes geram linha propria no e-mail; as fracas
+     novas aparecem apenas no log e em uma linha final do e-mail (quando ele for enviado por outro motivo).
   3. Envia e-mail so se houver achado novo (plano novo com mencao, mencao nova em plano ja conhecido, ou
      plano com mencao que passou a APROVADO). Na primeira execucao grava a linha de base sem enviar e-mail.
   4. Em caso de falha da API, registra e envia um aviso (no maximo um por semana).
@@ -70,7 +73,10 @@ PADRAO_GDF = re.compile(
     r"|ADMINISTRACAO REGIONAL|ADMINISTRACOES REGIONAIS|FUNDO CONSTITUCIONAL DO DISTRITO"
 )
 # Palavras que indicam instrumento ou papel de execucao junto ao GDF (prioridade alta)
-PADRAO_PAPEL = re.compile(r"CONVENIO|AJUSTE|ACORDO|TERMO DE (?:COOPERACAO|FOMENTO|COLABORACAO)|COOPERACAO TECNICA|EXECUTOR|EXECUTAR|EXECUCAO DESCENTRALIZADA|CELEBRAR|CELEBRA|REPASSE|CONTRAPARTIDA")
+PADRAO_PAPEL = re.compile(r"CONVENIO|AJUSTE|ACORDO|TERMO DE (?:COOPERACAO|FOMENTO|COLABORACAO)|COOPERACAO TECNICA|EXECUTOR|EXECUTAR|EXECUCAO DESCENTRALIZADA|CELEBRAR|CELEBRA|REPASSE|CONTRAPARTIDA|BENEFICIARI|BENEFICIAD|RECEBEDOR|RECEBERA|PARCERIA|PARCEIR[OA]S? (?:DO|DA) (?:GDF|GOVERNO)|COMODATO|DOACAO|CESSAO")
+# Mencao FORTE = ha palavra de papel junto ao termo OU o termo aparece em meta/etapa (onde ficam valores e execucao).
+# Mencao FRACA = so citada de passagem (ex.: lista de parceiros na justificativa); nao gera linha propria no e-mail.
+ORIGENS_FORTES = {"meta", "etapa"}
 SITUACOES_APROVADAS = {"APROVADO", "ANALISE_APROVADA"}
 # Enumeracoes genericas ("secretarias dos estados e do Distrito Federal") nao identificam o GDF
 GENERICAS = re.compile(r"(?:ESTADOS|UNIDADES DA FEDERACAO|ENTES FEDERATIVOS)(?:[^.;]{0,30}?),? (?:E )?(?:DO )?DISTRITO FEDERAL")
@@ -114,7 +120,8 @@ def trechos(texto, origem):
     for m in PADRAO_GDF.finditer(base):
         i, f = max(0, m.start() - 160), m.end() + 200
         janela = base[i:f]
-        achados.append({"origem": origem, "termo": m.group(0)[:60], "papel": bool(PADRAO_PAPEL.search(janela)),
+        papel = bool(PADRAO_PAPEL.search(janela))
+        achados.append({"origem": origem, "termo": m.group(0)[:60], "papel": papel, "forte": papel or origem in ORIGENS_FORTES,
                         "trecho": re.sub(r"\s+", " ", str(texto)[i:f]).strip()})
         if len(achados) >= 3:
             break
@@ -184,7 +191,7 @@ def gravar_estado(est):
     ESTADO.write_text(json.dumps(est, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
-def monta_email(novos):
+def monta_email(novos, fracas=()):
     def linha(p, a):
         flag = "<b style='color:#b00020'>possível instrumento/execução</b>" if any(x["papel"] for x in a["achados"]) else "menção"
         itens = "".join(f"<li><i>{html.escape(x['origem'])}</i> — {html.escape(x['trecho'][:340])}</li>" for x in a["achados"][:3])
@@ -199,7 +206,9 @@ def monta_email(novos):
         "<table border='1' cellpadding='5' cellspacing='0' style='border-collapse:collapse;font-size:12px'>"
         "<tr style='background:#0d1b3e;color:#fff'><th>Plano de ação</th><th>Executora federal</th><th>Situação</th><th>Valor</th><th>Vigência</th><th>Trechos</th></tr>"
         + "".join(linha(x["plano"], x) for x in ordem) + "</table>"
-        "<p style='font-size:12px;color:#555'>O TED ocorre entre órgãos da União; a menção ao GDF não indica, por si só, repasse ou instrumento com o Distrito Federal. "
+        + ("<p style='font-size:12px;color:#555'>Citações apenas incidentais ao GDF (sem papel de execução e sem valor em meta/etapa), listadas por transparência: "
+           + "; ".join(html.escape(f"{x['plano']['codigo_plano_acao']} ({x['achados'][0]['termo']})") for x in fracas) + ".</p>" if fracas else "")
+        + "<p style='font-size:12px;color:#555'>O TED ocorre entre órgãos da União; a menção ao GDF não indica, por si só, repasse ou instrumento com o Distrito Federal. "
         "O Decreto nº 10.426/2020 (art. 16, §3º, III, e §4º) permite que a executora federal descentralize a execução por convênio, acordo ou ajuste com entes "
         "federativos; se for o caso, o ajuste pode não constar do módulo de convênios do Transferegov. Verificar o termo no processo SEI do TED e, se houver ajuste com o "
         "GDF, orientar a UG a cadastrá-lo no SIGGo (IN nº 13/2026).</p>")
@@ -242,19 +251,27 @@ def main():
         a_analisar = [p for p in planos if str(p["id_plano_acao"]) not in anterior or anterior[str(p["id_plano_acao"])]["assinatura"] != assinatura_plano(p)]
         print(f"API atualizada em {data_api} | planos: {len(planos)} | a analisar (novos/alterados): {len(a_analisar)}" + (" | LINHA DE BASE" if baseline else ""))
         novo_estado = {} if baseline else dict(anterior)
-        alertas = []
+        alertas, fracas = [], []
         lote = baixar_lote() if len(a_analisar) > 150 else None
         for i, p in enumerate(a_analisar, 1):
             achados = analisar_plano(p, lote)
             pid = str(p["id_plano_acao"])
             ant = anterior.get(pid, {})
-            hashes = sorted(hashlib.sha1(x["trecho"][:120].encode("utf-8")).hexdigest() for x in achados)
-            novo_estado[pid] = {"assinatura": assinatura_plano(p), "mencoes": hashes, "situacao": p["tx_situacao_plano_acao"], "codigo": p["codigo_plano_acao"]}
-            ja = set(ant.get("mencoes", []))
-            nova_mencao = bool(set(hashes) - ja)
-            virou_aprovado = bool(hashes) and p["tx_situacao_plano_acao"] in SITUACOES_APROVADAS and ant.get("situacao") not in SITUACOES_APROVADAS and ant
-            if achados and (nova_mencao or virou_aprovado):
+            def h(x):
+                return hashlib.sha1(x["trecho"][:120].encode("utf-8")).hexdigest()
+            hashes = sorted(h(x) for x in achados)
+            hashes_fortes = sorted(h(x) for x in achados if x["forte"])
+            novo_estado[pid] = {"assinatura": assinatura_plano(p), "mencoes": hashes, "mencoes_fortes": hashes_fortes,
+                                "situacao": p["tx_situacao_plano_acao"], "codigo": p["codigo_plano_acao"]}
+            fortes = [x for x in achados if x["forte"]]
+            # estado antigo (sem "mencoes_fortes"): usa "mencoes" como base, para nao reavisar o que ja foi avisado
+            ja = set(ant.get("mencoes_fortes", ant.get("mencoes", [])))
+            nova_mencao = bool(set(hashes_fortes) - ja)
+            virou_aprovado = bool(hashes_fortes) and p["tx_situacao_plano_acao"] in SITUACOES_APROVADAS and ant.get("situacao") not in SITUACOES_APROVADAS and ant
+            if fortes and (nova_mencao or virou_aprovado):
                 alertas.append({"plano": p, "achados": achados})
+            elif achados and not fortes and (set(hashes) - set(ant.get("mencoes", []))):
+                fracas.append({"plano": p, "achados": achados})
             if i % 100 == 0:
                 print(f"  analisados {i}/{len(a_analisar)}", flush=True)
         for p in planos:   # planos nao alterados mantem o estado; os novos sem mencao entram com lista vazia
@@ -272,10 +289,12 @@ def main():
 
     comMencao = sum(1 for v in novo_estado.values() if v["mencoes"])
     print(f"planos com menção ao GDF (acumulado): {comMencao} | novos alertas: {len(alertas)}")
+    for x in fracas:
+        print(f"  menção fraca (sem aviso): {x['plano']['codigo_plano_acao']} | {x['plano']['unidade_responsavel_execucao']} | termo: {x['achados'][0]['termo']}")
     if baseline:
         print("Linha de base gravada; nenhum e-mail enviado.")
     elif alertas:
-        corpo = monta_email(alertas)
+        corpo = monta_email(alertas, fracas)
         assunto = f"TED com menção ao GDF: {len(alertas)} novo(s) plano(s) — {datetime.now():%d/%m/%Y}"
         if a.dry_run:
             print("[DRY-RUN] assunto:", assunto)
