@@ -132,6 +132,7 @@ Executar-Script "extrair_conciliacao_bens_moveis_sisgepat.py"
 Executar-Script "extrair_conciliacao_bens_intangiveis_sisgepat.py"
 Executar-Script "extrair_correspondencia_ativo_passivo.py"
 Executar-Script "extrair_correspondencia_ativo_passivo_saldo.py"
+Executar-Script "extrair_saldos_antigos_cc_ano.py"
 
 $env:NO_GIT_PUSH = ""
 
